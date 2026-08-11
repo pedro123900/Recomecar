@@ -7,6 +7,13 @@
 	"name": "recomecar",
 	"compatibility_date": "2026-08-11",
 	"main": "./workers/app.ts",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "recomecar-db",
+			"database_id": "4ec54a00-4af0-4bd0-8b66-30d883a47b0c"
+		}
+	],
 	"observability": {
 		"enabled": true
 	},
