@@ -14,6 +14,12 @@
 			"database_id": "4ec54a00-4af0-4bd0-8b66-30d883a47b0c"
 		}
 	],
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "recomecar-media"
+		}
+	],
 	"observability": {
 		"enabled": true
 	},
