@@ -1,0 +1,148 @@
+# CLAUDE.md — Site do Grupo Recomeçar
+
+Este arquivo é a constituição do projeto. Leia-o por inteiro no início de toda sessão, junto com o `DESIGN.md` (identidade visual e processo de crítica). As decisões registradas aqui foram tomadas e fechadas pelo time (Pedro, Tuti, Gui). **Não reabra decisão fechada nem proponha alternativa a item marcado como fechado, a menos que o Pedro traga um fato novo.**
+
+## O projeto em um parágrafo
+
+Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pedro de Alcântara, sob a proteção de Nossa Senhora das Graças. O produto principal é a **galeria multi-retiro**: um acervo permanente de fotos e vídeos dos retiros, substituindo os Google Drives soltos usados até hoje. Produtos secundários (vitrines): **Biblioteca** (catálogo de livros, capa + descrição) e **RecomeMusic** (página do álbum do grupo, embed do Spotify, 13 faixas). A hierarquia é: o grupo vem primeiro (a home é do Recomeçar), os produtos vivem dentro.
+
+## Restrições permanentes (invioláveis)
+
+- **Custo ~zero ancorado no egress gratuito do R2.** Nenhuma proposta pode introduzir cobrança de banda. Mídia é R2, ponto.
+- **Prazo fixo:** o 9 Recomeçar acontece em **25–27/09/2026** e não move.
+- **Público interno**, ~600 pessoas, acesso majoritariamente por **celular**. Mobile-first em tudo que é público.
+- **Site aberto, sem senha.** Galeria com `noindex` e fora do sitemap; home institucional indexável.
+- **Privacidade com menores de idade** pesa em toda decisão (é o motivo do descarte de reconhecimento facial).
+- **Repositório público** (`github.com/pedro123900/Recomecar`): **nenhum segredo commitado, nunca** (tokens, chaves, senhas). Conferir `.gitignore` antes de qualquer push que envolva configuração.
+- **Cronograma e conteúdo interno de retiro nunca entram em arquivo versionado** (nomes de momentos-surpresa, dinâmicas, nomes de pessoas): o repositório é público e revelaria as surpresas das próximas edições. Cronograma entra no sistema via admin (banco) ou arquivo local fora do git. Nenhum seed commitado pode conter cronograma real.
+
+## Como trabalhar com o Pedro
+
+- Pedro orquestra e revisa; **você implementa**. Trate-o como par técnico, não como leigo. Ele não coda na mão, mas lê código rápido.
+- **Confirme com ele antes de qualquer ação que envolva conta** (push, deploy, criação de recursos Cloudflare, instalação global). Nunca use force push.
+- Migrations e schema: **mostrar para revisão antes de aplicar.**
+- Idioma do site, do conteúdo e das rotas: **português (pt-BR)**.
+- Teste sempre com **conteúdo real** (fotos reais com EXIF, livros reais, texto institucional real). Placeholder esconde slop.
+- Trabalho visual segue o **loop de crítica do DESIGN.md** (screenshot Playwright → crítica → refino). Nunca aceite a primeira versão de uma tela.
+- Trabalho em múltiplos agentes/worktrees: **somente com autorização explícita do Pedro**, e só depois da fundação pronta (schema e rotas congelados).
+
+## Stack e infraestrutura (estado real)
+
+| Item | Estado |
+|---|---|
+| Framework | **React Router 8** (framework mode) — versão instalada pelo template oficial da Cloudflare. Não sugerir troca de framework. |
+| Hospedagem | Cloudflare Workers. Deploy em `https://recomecar.pedrovsilva.workers.dev` (URL provisória; domínio próprio virá). |
+| Banco | Cloudflare D1 — `recomecar-db`, binding `DB` no `wrangler.jsonc`. Schema inicial aplicado (migration `0001_schema_inicial.sql`, local e remoto, 14/08/2026). |
+| Mídia | Cloudflare R2 — bucket `recomecar-media` criado, binding `MEDIA` no `wrangler.jsonc`, deploy ativo. |
+| Auth do admin | Cloudflare Access no `/admin` — configurar **depois** que o domínio próprio existir (config de painel, não de código). Até lá, `/admin` fica sem proteção e **sem dados sensíveis**. |
+| Repositório | `github.com/pedro123900/Recomecar`, público, branch `main`. |
+| Ambiente do Pedro | Windows + Git Bash, Node **22.16.0** (RR8 pede ≥22.22 — hoje só warning; atualização pendente), projeto em `C:\Projetos\recomecar`. |
+
+## Mapa de rotas (contrato — não alterar sem o Pedro)
+
+| Path | Página |
+|---|---|
+| `/` | Home do grupo (apresentação) |
+| `/retiros` | Índice de retiros — cards das edições |
+| `/retiros/:edicao` | Página do retiro: infos básicas + galeria completa **na mesma página** (ex.: `9-recomecar`) |
+| `/biblioteca` | Biblioteca (vitrine de livros) |
+| `/musica` | RecomeMusic (embed do álbum no Spotify) |
+| `/admin` | Painel admin |
+| `/admin/retiros` | Gestão de retiros (edições, tema, créditos) |
+| `/admin/retiros/:edicao/cronograma` | Construtor de cronograma |
+| `/admin/retiros/:edicao/upload` | Upload de mídia em lote |
+| `/admin/biblioteca` | Gestão da biblioteca |
+
+Menu público: **Retiros · Biblioteca · RecomeMusic** (rótulos decididos; path `/retiros` é fixo). Não existe seção "Eventos". Créditos da edição ficam no rodapé da página do retiro — sem rota própria. Lightbox de foto: overlay dentro de `/retiros/:edicao`, idealmente com URL compartilhável (query param ou rota filha) — detalhe de implementação livre.
+
+## Modelo de dados (schema-alvo)
+
+Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os campos abaixo são o contrato; detalhes de tipos/índices são seus.
+
+- **retiros** — id, serie (`Recomeçar` | `Renascer`; existem as duas séries, não assumir regra além disso), numero, slug (ex.: `9-recomecar`), titulo, data_inicio, data_fim, padroeiro_nome, padroeiro_invocacao (opcional), **link_drive (opcional)**, tema (JSON com as cores da edição; ausente ⇒ tema padrão), publicado.
+  - **Regra das edições antigas:** edição com `link_drive` preenchido e sem mídia no acervo ⇒ o card em `/retiros` abre o Google Drive externo daquela edição (nova aba). A estrutura interna do site começa no 9 Recomeçar. **Não haverá backfill** — decisão fechada; os Drives antigos permanecem como a cópia daquelas edições.
+- **momentos** — id, retiro_id, nome, dia, inicio (datetime), fim (datetime), musica (opcional).
+- **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, equipe_id (opcional; definida por lote no upload), largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
+  - `momento_id = NULL` significa "fora de qualquer janela" ⇒ exibir e filtrar como **"Geral / Bastidores"**.
+- **equipes** — id, nome (catálogo reutilizado entre edições).
+- **livros** — id, titulo, autor (opcional), descricao, capa, ordem.
+- **creditos** — id, retiro_id, nome, funcao (opcional), ordem.
+
+Chaves derivadas no R2 (thumb, média, poster) seguem convenção previsível a partir do id/chave do original — proponha a convenção na fatia vertical.
+
+## Motor de tags por cronograma (o coração — regras de negócio)
+
+Ninguém etiqueta foto manualmente. O cronograma de cada retiro é cadastrado (momentos com dia, início, fim, nome, música). No upload, o horário de captura (EXIF) é cruzado com as janelas e as tags de dia/momento/música são aplicadas automaticamente. **Único campo manual: equipe, por lote no upload.** As tags são o sistema de busca/filtro do site (dia + momento + equipe, combináveis).
+
+Regras fixas:
+
+- Janela **semiaberta**: `inicio <= capturada_em < fim`.
+- No construtor de cronograma, o fim de um momento = início do próximo (preenchido automaticamente).
+- Fallback: sem janela correspondente ⇒ `momento_id NULL` ⇒ "Geral / Bastidores".
+- **Offset de relógio por fotógrafo/lote** aplicado a `capturada_em` **antes** do match (câmera com hora errada). Sincronizar relógios antes do retiro é a mitigação primária.
+- Vídeos podem guardar a data em campo EXIF diferente do de fotos — **testar com o equipamento real** quando o material chegar.
+- Atraso no retiro corrige-se **editando a janela no cronograma** ⇒ re-tag retroativo automático ao salvar:
+
+```sql
+UPDATE fotos
+SET momento_id = (SELECT id FROM momentos m
+                  WHERE m.retiro_id = fotos.retiro_id
+                    AND fotos.capturada_em >= m.inicio
+                    AND fotos.capturada_em <  m.fim)
+WHERE retiro_id = :retiro
+```
+
+**Regras expostas pelo cronograma real** (análise de uma edição passada, que validou o schema como está):
+
+- **Dia lógico ≠ dia de calendário** — confirmado na prática: a "sexta" vai até 1:30, o "sábado" até 0:00. Exibição e agrupamento por "Dia" no site vêm **sempre** do campo `dia` do momento, **nunca** de `date(capturada_em)`.
+- **Virada da meia-noite no construtor:** dentro de um dia lógico, horário digitado menor que o do momento anterior significa **+1 dia no calendário**, mantendo o dia lógico da aba. O último momento de cada dia tem o fim digitado manualmente (não há próximo para encadear).
+- **Sobreposição de janelas é legítima** — trilhas paralelas de encontristas × equipes existem no cronograma real. O construtor avisa, mas não bloqueia. Desempate determinístico do re-tag é **requisito da fase do motor**; candidata: usar a tag de equipe do lote como critério de preferência entre janelas paralelas. Não implementar agora — registrado para a fase do motor.
+- **Bastidores herdam dia lógico pela faixa do dia** (do primeiro momento do dia N até o primeiro momento do dia N+1) — refinamento da fase do motor, não de schema.
+
+Referência de UX do construtor: `cronograma-builder.html` (mockup validado — abas por dia, encadeamento de horários, avisos de buraco/sobreposição, clonar edição anterior, prévia viva). As cores dele são de identidade descartada; a UX vale, o visual não.
+
+## Pipeline de mídia
+
+- Derivadas geradas **no navegador do admin durante o upload** (Workers não executam binário nativo — sharp/ffmpeg impossíveis no servidor):
+  - Thumb ~**400px WebP** (fallback JPEG) para a grade; média ~**1600px** para o lightbox; **original preservado** para download.
+  - Poster de vídeo: frame capturado via `<video>` + canvas.
+  - EXIF lido com **exifr**. Upload direto ao R2 com **URLs assinadas**.
+- Grade: `loading="lazy"`, aspect-ratio reservado (zero layout shift), blur-up.
+- **Download individual apenas.** Sem ZIP/download em lote (decisão fechada).
+- **Sem marcação de pessoas em nenhuma forma** (nem campo no banco). **Reconhecimento facial descartado por LGPD** (biometria = dado sensível, art. 11; menores, art. 14). Não repropor, nem "versão light".
+- Plano B (só se o pipeline no navegador incomodar o Pedro): Cloudflare Images ~US$5/mês.
+
+## Escopo v1 (lançamento) — dentro e fora
+
+**Dentro:** home do grupo + página completa do 9 Recomeçar (infos + galeria com navegação por pastas Dia → Momento → Equipe **e** linha do tempo cronológica com cabeçalhos do cronograma e músicas, lightbox com player de vídeo, filtros combináveis, download individual) + índice de retiros com cards de todas as edições (antigas → link Drive) + biblioteca + RecomeMusic + admin único.
+
+**Fora (não implementar, não sugerir como novidade):** backfill das edições antigas; reconhecimento facial; marcação de pessoas; empréstimo na biblioteca; página institucional para externos; ZIP; tema por edição aplicado à **página inteira** (a arquitetura por tokens nasce pronta — ver DESIGN.md — mas ativar página tematizada é extra pós-v1; o layout tematizado do 9 será decidido pelo time depois). O nível de tema que **entra** na v1 é o do esboço: cor própria por card no índice.
+
+## SEO e privacidade
+
+Rotas de galeria (`/retiros/:edicao`) com meta robots `noindex` e fora do sitemap. Home indexável. Nada de analytics invasivo; se medição for necessária um dia, o Pedro decide a ferramenta.
+
+## Custos (por que as decisões são o que são)
+
+- **R2:** 10GB grátis; depois US$ 0,015/GB/mês; **egress US$ 0 — a fundação do modelo**; 1M escritas + 10M leituras/mês grátis (excedente ~US$ 0,36/milhão de leituras).
+- **D1:** grátis até 10GB, **sem pausa por inatividade**. **Access:** grátis ≤50 usuários. **Workers:** free tier cobre o volume do grupo.
+- Premissa de volume (**estimativa do Pedro, ainda não medida**): ~60GB por retiro, 2 retiros/ano. Quando o Drive de uma edição antiga chegar, **medir o volume real** e substituir a premissa nos planejamentos.
+- Normalização de vídeo no upload (reduzir bitrate/resolução do original): **decisão em aberto para a fase do motor** — derrubaria o volume pela metade ou mais. Não implementar sem o Pedro decidir.
+
+## Becos sem saída (já avaliados — não retentar)
+
+Svelte/SvelteKit + Vercel (banda paga, Hobby proíbe uso comercial, duas plataformas); S3/Supabase Storage para mídia (egress pago); Supabase free como banco (pausa após 7 dias inativo); sharp/ffmpeg no servidor (Workers sem binário nativo); reconhecimento facial (LGPD); NFC para photobooth (não dispara; solução satélite fora do caminho crítico: botão Bluetooth + MacroDroid em Android); UIColors (ficou pago; alternativas: Realtime Colors, tints.dev, Coolors); mockup via gerador de imagem (substituído pelo loop código + screenshot + crítica); identidades navy/teal e marrom/dourado (descartadas — a identidade atual, do Tuti, está no DESIGN.md).
+
+## Próximo marco: a fatia vertical do motor
+
+Sequência: migration do schema (**feita** — revisada pelo Pedro e aplicada local e remoto em 14/08/2026) → admin cru sobe ~20 fotos **reais** com EXIF verificado → EXIF lido → cruzamento com cronograma de teste → D1/R2 populados → grade simples exibe → download funciona.
+
+**Critério de pronto (o teste de vida do projeto):** tags corretas nas fotos reais **+ re-tag retroativo funcionando ao editar uma janela do cronograma**. Enquanto isso não passa, nada de alargar escopo.
+
+Depois da fatia: galeria pública completa → admin completo → aplicação do design (DESIGN.md) → semana final de teste com a equipe.
+
+## Pendências fora do código (com dono — não são suas tarefas)
+
+- **Pedro:** material real (fotos originais com EXIF — WhatsApp destrói EXIF, tem que vir do arquivo original; cronograma real de uma edição passada; lista de livros com capa e descrição; link do álbum no Spotify; nomes dos créditos); links dos Google Drives + nome/série/padroeiro das 8 edições antigas (para os cards); domínio próprio; licença comercial da fonte More Sugar; Node ≥ 22.22; possível migração para conta Cloudflare do grupo (janela ideal: antes do upload em massa e do domínio); token de API do R2 (S3, escopo no bucket) para as URLs assinadas de upload — criar quando a fatia chegar nessa etapa, e guardar via `wrangler secret`, nunca no repositório.
+- **Tuti:** carimbo final do `#F8E2C5` na primeira tela implementada; artes dos cards das edições; futuramente, layout tematizado do 9.
+- **Cloudflare Access** no `/admin`: configurar quando o domínio existir.
