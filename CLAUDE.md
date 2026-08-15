@@ -62,9 +62,8 @@ Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os ca
 - **retiros** — id, serie (`Recomeçar` | `Renascer`; existem as duas séries, não assumir regra além disso), numero, slug (ex.: `9-recomecar`), titulo, data_inicio, data_fim, padroeiro_nome, padroeiro_invocacao (opcional), **link_drive (opcional)**, tema (JSON com as cores da edição; ausente ⇒ tema padrão), publicado.
   - **Regra das edições antigas:** edição com `link_drive` preenchido e sem mídia no acervo ⇒ o card em `/retiros` abre o Google Drive externo daquela edição (nova aba). A estrutura interna do site começa no 9 Recomeçar. **Não haverá backfill** — decisão fechada; os Drives antigos permanecem como a cópia daquelas edições.
 - **momentos** — id, retiro_id, nome, dia, inicio (datetime), fim (datetime), musica (opcional).
-- **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, equipe_id (opcional; definida por lote no upload), largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
+- **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
   - `momento_id = NULL` significa "fora de qualquer janela" ⇒ exibir e filtrar como **"Geral / Bastidores"**.
-- **equipes** — id, nome (catálogo reutilizado entre edições).
 - **livros** — id, titulo, autor (opcional), descricao, capa, ordem.
 - **creditos** — id, retiro_id, nome, funcao (opcional), ordem.
 
@@ -72,14 +71,14 @@ Chaves derivadas no R2 (thumb, média, poster) seguem convenção previsível a 
 
 ## Motor de tags por cronograma (o coração — regras de negócio)
 
-Ninguém etiqueta foto manualmente. O cronograma de cada retiro é cadastrado (momentos com dia, início, fim, nome, música). No upload, o horário de captura (EXIF) é cruzado com as janelas e as tags de dia/momento/música são aplicadas automaticamente. **Único campo manual: equipe, por lote no upload.** As tags são o sistema de busca/filtro do site (dia + momento + equipe, combináveis).
+Ninguém etiqueta foto manualmente. O cronograma de cada retiro é cadastrado (momentos com dia, início, fim, nome, música). No upload, o horário de captura (EXIF) é cruzado com as janelas e as tags de dia/momento/música são aplicadas automaticamente. **Nenhuma etiqueta manual: o upload é 100% automático** (selecionar arquivos e enviar, sem nenhum campo). As tags são o sistema de busca/filtro do site (dia + momento + música, combináveis).
 
 Regras fixas:
 
 - Janela **semiaberta**: `inicio <= capturada_em < fim`.
 - No construtor de cronograma, o fim de um momento = início do próximo (preenchido automaticamente).
 - Fallback: sem janela correspondente ⇒ `momento_id NULL` ⇒ "Geral / Bastidores".
-- **Offset de relógio por fotógrafo/lote** aplicado a `capturada_em` **antes** do match (câmera com hora errada). Sincronizar relógios antes do retiro é a mitigação primária.
+- **Offset de relógio por aparelho** aplicado a `capturada_em` **antes** do match (câmera com hora errada). O aparelho é identificado pelos metadados EXIF de câmera (marca, modelo e número de série quando existir); o sistema agrupa as fotos por aparelho automaticamente, e corrigir um aparelho corrige todas as fotos dele, independente de quem subiu ou em qual leva. O offset **não aparece no fluxo de upload** (que não tem campo nenhum): vive numa tela de manutenção do admin ("ajustar relógio de um aparelho"), usada apenas quando um erro de relógio for descoberto. A mitigação primária continua sendo o checklist pré-retiro: conferir data, hora e fuso de cada câmera antes da sexta-feira.
 - Vídeos podem guardar a data em campo EXIF diferente do de fotos — **testar com o equipamento real** quando o material chegar.
 - Atraso no retiro corrige-se **editando a janela no cronograma** ⇒ re-tag retroativo automático ao salvar:
 
@@ -96,10 +95,10 @@ WHERE retiro_id = :retiro
 
 - **Dia lógico ≠ dia de calendário** — confirmado na prática: a "sexta" vai até 1:30, o "sábado" até 0:00. Exibição e agrupamento por "Dia" no site vêm **sempre** do campo `dia` do momento, **nunca** de `date(capturada_em)`.
 - **Virada da meia-noite no construtor:** dentro de um dia lógico, horário digitado menor que o do momento anterior significa **+1 dia no calendário**, mantendo o dia lógico da aba. O último momento de cada dia tem o fim digitado manualmente (não há próximo para encadear).
-- **Sobreposição de janelas é legítima** — trilhas paralelas de encontristas × equipes existem no cronograma real. O construtor avisa, mas não bloqueia. Desempate determinístico do re-tag é **requisito da fase do motor**; candidata: usar a tag de equipe do lote como critério de preferência entre janelas paralelas. Não implementar agora — registrado para a fase do motor.
+- **Sobreposição de janelas é legítima** — trilhas paralelas de encontristas × equipes existem no cronograma real. O construtor avisa, mas não bloqueia. Desempate determinístico do re-tag é **requisito da fase do motor**; o critério será definido na própria fase do motor. Não implementar agora.
 - **Bastidores herdam dia lógico pela faixa do dia** (do primeiro momento do dia N até o primeiro momento do dia N+1) — refinamento da fase do motor, não de schema.
 
-Referência de UX do construtor: `cronograma-builder.html` (mockup validado — abas por dia, encadeamento de horários, avisos de buraco/sobreposição, clonar edição anterior, prévia viva). As cores dele são de identidade descartada; a UX vale, o visual não.
+UX validada do construtor (especificação em texto; não há arquivo de mockup): abas por dia, encadeamento de horários, avisos de buraco/sobreposição, clonar edição anterior, prévia viva.
 
 ## Pipeline de mídia
 
@@ -114,7 +113,7 @@ Referência de UX do construtor: `cronograma-builder.html` (mockup validado — 
 
 ## Escopo v1 (lançamento) — dentro e fora
 
-**Dentro:** home do grupo + página completa do 9 Recomeçar (infos + galeria com navegação por pastas Dia → Momento → Equipe **e** linha do tempo cronológica com cabeçalhos do cronograma e músicas, lightbox com player de vídeo, filtros combináveis, download individual) + índice de retiros com cards de todas as edições (antigas → link Drive) + biblioteca + RecomeMusic + admin único.
+**Dentro:** home do grupo + página completa do 9 Recomeçar (infos + galeria com navegação por pastas Dia → Momento **e** linha do tempo cronológica com cabeçalhos do cronograma e músicas, lightbox com player de vídeo, filtros combináveis, download individual) + índice de retiros com cards de todas as edições (antigas → link Drive) + biblioteca + RecomeMusic + admin único.
 
 **Fora (não implementar, não sugerir como novidade):** backfill das edições antigas; reconhecimento facial; marcação de pessoas; empréstimo na biblioteca; página institucional para externos; ZIP; tema por edição aplicado à **página inteira** (a arquitetura por tokens nasce pronta — ver DESIGN.md — mas ativar página tematizada é extra pós-v1; o layout tematizado do 9 será decidido pelo time depois). O nível de tema que **entra** na v1 é o do esboço: cor própria por card no índice.
 
