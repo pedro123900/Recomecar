@@ -20,6 +20,7 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 
 - Pedro orquestra e revisa; **você implementa**. Trate-o como par técnico, não como leigo. Ele não coda na mão, mas lê código rápido.
 - **Confirme com ele antes de qualquer ação que envolva conta** (push, deploy, criação de recursos Cloudflare, instalação global). Nunca use force push.
+- **Você nunca executa `git commit` nem `git push`.** Ao concluir um bloco de trabalho, apresente a lista de arquivos a incluir e a mensagem de commit sugerida; o Pedro roda `git add`, `git commit` e `git push` ele mesmo no terminal.
 - Migrations e schema: **mostrar para revisão antes de aplicar.**
 - Idioma do site, do conteúdo e das rotas: **português (pt-BR)**.
 - Teste sempre com **conteúdo real** (fotos reais com EXIF, livros reais, texto institucional real). Placeholder esconde slop.
