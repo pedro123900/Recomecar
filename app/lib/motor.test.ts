@@ -80,6 +80,33 @@ describe("virada da meia-noite e dia lógico", () => {
   });
 });
 
+describe("pré-retiro — dia lógico adicional, uma semana antes", () => {
+  // Momento do pré-retiro (data_pre), sábado anterior ao fim de semana do
+  // retiro. Para o motor é uma janela como outra qualquer.
+  const momentoDoPre = {
+    id: 20,
+    dia: "2099-09-19",
+    inicio: "2099-09-19 14:00:00",
+    fim: "2099-09-19 15:00:00",
+  };
+
+  test("foto no dia do pré cai no momento do pré", () => {
+    expect(atribuirMomento("2099-09-19 14:30:00", [momentoDoPre])).toBe(20);
+  });
+
+  test("foto no intervalo vazio entre o pré e a sexta cai em Bastidores", () => {
+    const sexta = {
+      id: 21,
+      inicio: "2099-09-25 18:00:00",
+      fim: "2099-09-25 20:00:00",
+    };
+    // quarta-feira entre o pré (19/09) e o retiro (25-27/09)
+    expect(
+      atribuirMomento("2099-09-23 10:00:00", [momentoDoPre, sexta]),
+    ).toBeNull();
+  });
+});
+
 describe("sobreposição — comportamento PROVISÓRIO registrado como está", () => {
   // ATENÇÃO: "menor inicio ganha" NÃO é decisão tomada. É o comportamento
   // provisório desta fase, registrado para ser determinístico. O desempate

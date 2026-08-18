@@ -7,12 +7,27 @@ export function adicionarDias(data: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function listarDias(dataInicio: string, dataFim: string): string[] {
-  const dias: string[] = [];
-  for (let d = dataInicio; d <= dataFim; d = adicionarDias(d, 1)) {
-    dias.push(d);
-  }
-  return dias;
+// Dias lógicos do retiro: datas EXPLÍCITAS, uma por dia — pré-retiro
+// opcional + três dias obrigatórios. Nenhuma inferência de intervalo: a
+// função só lista o que está preenchido, na ordem dos campos. O buraco de
+// ~uma semana entre o pré e a sexta é normal (fotos nele => Bastidores).
+export function listarDiasLogicos(retiro: {
+  data_pre: string | null;
+  data_dia1: string;
+  data_dia2: string;
+  data_dia3: string;
+}): string[] {
+  return [retiro.data_pre, retiro.data_dia1, retiro.data_dia2, retiro.data_dia3]
+    .filter((d): d is string => d !== null && d !== "");
+}
+
+// Datas do retiro editadas com cronograma existente: momentos cujo dia lógico
+// saiu do conjunto de dias são apontados para aviso (nunca bloqueio).
+export function momentosForaDosDias<T extends { dia: string }>(
+  momentos: T[],
+  dias: string[],
+): T[] {
+  return momentos.filter((m) => !dias.includes(m.dia));
 }
 
 // Resolve um 'HH:MM' digitado para datetime completo dentro do dia lógico.

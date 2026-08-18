@@ -14,6 +14,7 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 - **Site aberto, sem senha.** Galeria com `noindex` e fora do sitemap; home institucional indexável.
 - **Privacidade com menores de idade** pesa em toda decisão (é o motivo do descarte de reconhecimento facial).
 - **Repositório público** (`github.com/pedro123900/Recomecar`): **nenhum segredo commitado, nunca** (tokens, chaves, senhas). Conferir `.gitignore` antes de qualquer push que envolva configuração.
+- **Tudo que varia entre edições é dado cadastrado pelo admin, nunca constante no código**: datas (inclusive a do pré-retiro), cronograma, momentos, tema, créditos. O site deve ser operável por futuras equipes Holly sem intervenção de desenvolvedor — adiar ou adiantar o retiro é editar quatro campos de data no formulário, e as abas do construtor se recalculam sozinhas.
 - **Cronograma e conteúdo interno de retiro nunca entram em arquivo versionado** (nomes de momentos-surpresa, dinâmicas, nomes de pessoas): o repositório é público e revelaria as surpresas das próximas edições. Cronograma entra no sistema via admin (banco) ou arquivo local fora do git. Nenhum seed commitado pode conter cronograma real.
 
 ## Como trabalhar com o Pedro
@@ -60,7 +61,7 @@ Menu público: **Retiros · Biblioteca · RecomeMusic** (rótulos decididos; pat
 
 Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os campos abaixo são o contrato; detalhes de tipos/índices são seus.
 
-- **retiros** — id, serie (`Recomeçar` | `Renascer`; existem as duas séries, não assumir regra além disso), numero, slug (ex.: `9-recomecar`), titulo, data_inicio, data_fim, padroeiro_nome, padroeiro_invocacao (opcional), **link_drive (opcional)**, tema (JSON com as cores da edição; ausente ⇒ tema padrão), publicado.
+- **retiros** — id, serie (`Recomeçar` | `Renascer`; existem as duas séries, não assumir regra além disso), numero, slug (ex.: `9-recomecar`), titulo, **dias lógicos como datas explícitas** (migration 0003): **data_pre (opcional, pré-retiro) + data_dia1, data_dia2, data_dia3 (obrigatórias)** — nenhuma inferência de intervalo; início/fim para exibição = dia1/dia3. O formato "pré opcional + 3 dias" é **estrutura do schema**: edição com número diferente de dias exigiria migration. Demais campos: padroeiro_nome, padroeiro_invocacao (opcional), **link_drive (opcional)**, tema (JSON com as cores da edição; ausente ⇒ tema padrão), publicado.
   - **Regra das edições antigas:** edição com `link_drive` preenchido e sem mídia no acervo ⇒ o card em `/retiros` abre o Google Drive externo daquela edição (nova aba). A estrutura interna do site começa no 9 Recomeçar. **Não haverá backfill** — decisão fechada; os Drives antigos permanecem como a cópia daquelas edições.
 - **momentos** — id, retiro_id, nome, dia, inicio (datetime), fim (datetime), musica (opcional).
 - **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
@@ -79,6 +80,7 @@ Regras fixas:
 - Janela **semiaberta**: `inicio <= capturada_em < fim`.
 - No construtor de cronograma, o fim de um momento = início do próximo (preenchido automaticamente).
 - Fallback: sem janela correspondente ⇒ `momento_id NULL` ⇒ "Geral / Bastidores".
+- **Pré-retiro é um dia lógico a mais do mesmo retiro** (`data_pre`, opcional; aba "Pré-retiro" no construtor): dia inteiro de programação no sábado anterior ao fim de semana do retiro, com momentos e tags normais — nada muda no upload. O **buraco de ~uma semana entre o pré e a sexta é normal**: fotos nesse intervalo caem em "Geral / Bastidores". Se as datas do retiro mudarem com cronograma existente, momentos com `dia` fora dos dias lógicos geram **aviso** ao salvar (não bloqueio) e o re-tag roda.
 - **Offset de relógio por aparelho** aplicado a `capturada_em` **antes** do match (câmera com hora errada). O aparelho é identificado pelos metadados EXIF de câmera (marca, modelo e número de série quando existir); o sistema agrupa as fotos por aparelho automaticamente, e corrigir um aparelho corrige todas as fotos dele, independente de quem subiu ou em qual leva. O offset **não aparece no fluxo de upload** (que não tem campo nenhum): vive numa tela de manutenção do admin ("ajustar relógio de um aparelho"), usada apenas quando um erro de relógio for descoberto. A mitigação primária continua sendo o checklist pré-retiro: conferir data, hora e fuso de cada câmera antes da sexta-feira.
 - Vídeos podem guardar a data em campo EXIF diferente do de fotos — **testar com o equipamento real** quando o material chegar.
 - Atraso no retiro corrige-se **editando a janela no cronograma** ⇒ re-tag retroativo automático ao salvar:

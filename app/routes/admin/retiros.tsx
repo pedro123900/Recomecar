@@ -1,8 +1,10 @@
 import { Form, Link, data, useSearchParams } from "react-router";
 import type { Route } from "./+types/retiros";
 import { contextoCloudflare } from "~/lib/contexto";
+import { listarDiasLogicos, momentosForaDosDias } from "~/lib/cronograma";
+import { aplicarRetag } from "~/lib/retag.server";
 import { slugify } from "~/lib/slug";
-import type { Retiro } from "~/lib/tipos";
+import type { Momento, Retiro } from "~/lib/tipos";
 
 export function meta() {
   return [{ title: "Gestão de retiros — Grupo Recomeçar" }];
@@ -11,7 +13,7 @@ export function meta() {
 export async function loader({ context }: Route.LoaderArgs) {
   const { env } = context.get(contextoCloudflare);
   const { results } = await env.DB.prepare(
-    "SELECT * FROM retiros ORDER BY data_inicio DESC",
+    "SELECT * FROM retiros ORDER BY data_dia1 DESC",
   ).all<Retiro>();
   return { retiros: results };
 }
@@ -38,11 +40,26 @@ export async function action({ request, context }: Route.ActionArgs) {
     const serie = texto("serie");
     const numero = Number(form.get("numero"));
     const titulo = texto("titulo");
-    const dataInicio = texto("data_inicio");
-    const dataFim = texto("data_fim");
-    if (!serie || !numero || !titulo || !dataInicio || !dataFim) {
+    const dataPre = texto("data_pre");
+    const dia1 = texto("data_dia1");
+    const dia2 = texto("data_dia2");
+    const dia3 = texto("data_dia3");
+    if (!serie || !numero || !titulo || !dia1 || !dia2 || !dia3) {
       return data(
-        { erro: "Preencha série, número, título e as duas datas." },
+        { erro: "Preencha série, número, título e as datas dos três dias." },
+        { status: 400 },
+      );
+    }
+    // Ordem também garantida por CHECK no banco; aqui é a mensagem amigável.
+    if (!(dia1 < dia2 && dia2 < dia3)) {
+      return data(
+        { erro: "As datas precisam estar em ordem: Dia 1 < Dia 2 < Dia 3." },
+        { status: 400 },
+      );
+    }
+    if (dataPre && !(dataPre < dia1)) {
+      return data(
+        { erro: "O pré-retiro precisa vir antes do Dia 1." },
         { status: 400 },
       );
     }
@@ -53,17 +70,20 @@ export async function action({ request, context }: Route.ActionArgs) {
       const slug = slugify(slugDigitado ?? `${numero} ${serie}`);
       await db
         .prepare(
-          `INSERT INTO retiros (serie, numero, slug, titulo, data_inicio, data_fim,
-             padroeiro_nome, padroeiro_invocacao, link_drive, publicado)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO retiros (serie, numero, slug, titulo, data_pre, data_dia1,
+             data_dia2, data_dia3, padroeiro_nome, padroeiro_invocacao,
+             link_drive, publicado)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           serie,
           numero,
           slug,
           titulo,
-          dataInicio,
-          dataFim,
+          dataPre,
+          dia1,
+          dia2,
+          dia3,
           texto("padroeiro_nome"),
           texto("padroeiro_invocacao"),
           texto("link_drive"),
@@ -74,14 +94,16 @@ export async function action({ request, context }: Route.ActionArgs) {
     }
 
     if (intent === "editar") {
+      const id = Number(form.get("id"));
       // Slug nunca é recalculado de série/número/título: vai para o banco o
       // que está no campo (normalizado), pré-preenchido com o valor salvo.
       const slug = slugify(slugDigitado ?? "");
       await db
         .prepare(
           `UPDATE retiros SET serie = ?, numero = ?, slug = ?, titulo = ?,
-             data_inicio = ?, data_fim = ?, padroeiro_nome = ?,
-             padroeiro_invocacao = ?, link_drive = ?, publicado = ?
+             data_pre = ?, data_dia1 = ?, data_dia2 = ?, data_dia3 = ?,
+             padroeiro_nome = ?, padroeiro_invocacao = ?, link_drive = ?,
+             publicado = ?
            WHERE id = ?`,
         )
         .bind(
@@ -89,16 +111,42 @@ export async function action({ request, context }: Route.ActionArgs) {
           numero,
           slug,
           titulo,
-          dataInicio,
-          dataFim,
+          dataPre,
+          dia1,
+          dia2,
+          dia3,
           texto("padroeiro_nome"),
           texto("padroeiro_invocacao"),
           texto("link_drive"),
           publicado,
-          Number(form.get("id")),
+          id,
         )
         .run();
-      return { ok: true };
+
+      // Datas editadas com cronograma existente: momentos cujo dia lógico
+      // saiu do intervalo geram aviso (nunca bloqueio), e o re-tag roda como
+      // em qualquer mudança que afeta o match.
+      const { results: momentos } = await db
+        .prepare("SELECT * FROM momentos WHERE retiro_id = ?")
+        .bind(id)
+        .all<Momento>();
+      const dias = listarDiasLogicos({
+        data_pre: dataPre,
+        data_dia1: dia1,
+        data_dia2: dia2,
+        data_dia3: dia3,
+      });
+      const fora = momentosForaDosDias(momentos, dias);
+      await aplicarRetag(db, id);
+      return {
+        ok: true,
+        aviso:
+          fora.length > 0
+            ? `Momentos com dia lógico fora das datas do retiro: ${fora
+                .map((m) => `"${m.nome}" (${m.dia})`)
+                .join(", ")}. Ajuste as datas ou o cronograma.`
+            : null,
+      };
     }
 
     return data({ erro: "Ação desconhecida." }, { status: 400 });
@@ -115,11 +163,14 @@ export default function AdminRetiros({
   const editandoId = Number(params.get("editar"));
   const editando = loaderData.retiros.find((r) => r.id === editandoId);
   const erro = actionData && "erro" in actionData ? actionData.erro : null;
+  const aviso =
+    actionData && "aviso" in actionData ? actionData.aviso : null;
 
   return (
     <main>
       <h1>Gestão de retiros</h1>
       {erro && <p role="alert">{erro}</p>}
+      {aviso && <p role="status">Aviso: {aviso}</p>}
 
       <table border={1}>
         <thead>
@@ -139,7 +190,8 @@ export default function AdminRetiros({
               </td>
               <td>{r.slug}</td>
               <td>
-                {r.data_inicio} a {r.data_fim}
+                {r.data_pre ? `pré ${r.data_pre} · ` : ""}
+                {r.data_dia1} a {r.data_dia3}
               </td>
               <td>{r.publicado ? "sim" : "não"}</td>
               <td>
@@ -208,21 +260,38 @@ export default function AdminRetiros({
         </p>
         <p>
           <label>
-            Início{" "}
+            Pré-retiro (opcional){" "}
             <input
-              name="data_inicio"
+              name="data_pre"
               type="date"
-              required
-              defaultValue={editando?.data_inicio}
+              defaultValue={editando?.data_pre ?? ""}
             />
           </label>{" "}
           <label>
-            Fim{" "}
+            Dia 1{" "}
             <input
-              name="data_fim"
+              name="data_dia1"
               type="date"
               required
-              defaultValue={editando?.data_fim}
+              defaultValue={editando?.data_dia1}
+            />
+          </label>{" "}
+          <label>
+            Dia 2{" "}
+            <input
+              name="data_dia2"
+              type="date"
+              required
+              defaultValue={editando?.data_dia2}
+            />
+          </label>{" "}
+          <label>
+            Dia 3{" "}
+            <input
+              name="data_dia3"
+              type="date"
+              required
+              defaultValue={editando?.data_dia3}
             />
           </label>
         </p>

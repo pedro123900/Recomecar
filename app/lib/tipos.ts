@@ -5,8 +5,12 @@ export interface Retiro {
   numero: number;
   slug: string;
   titulo: string;
-  data_inicio: string;
-  data_fim: string;
+  // dias lógicos como datas explícitas (migration 0003): pré opcional +
+  // três dias obrigatórios; início/fim para exibição = dia1/dia3
+  data_pre: string | null;
+  data_dia1: string;
+  data_dia2: string;
+  data_dia3: string;
   padroeiro_nome: string | null;
   padroeiro_invocacao: string | null;
   link_drive: string | null;

@@ -3,10 +3,10 @@ import type { Route } from "./+types/cronograma";
 import { contextoCloudflare } from "~/lib/contexto";
 import {
   calcularAvisos,
-  listarDias,
+  listarDiasLogicos,
   resolverDatetime,
 } from "~/lib/cronograma";
-import { calcularRetag, type FotoParaRetag, type JanelaMomento } from "~/lib/motor";
+import { aplicarRetag } from "~/lib/retag.server";
 import type { Momento, Retiro } from "~/lib/tipos";
 
 export function meta() {
@@ -22,31 +22,6 @@ async function carregarRetiro(db: D1Database, slug: string): Promise<Retiro> {
   return retiro;
 }
 
-// Re-tag retroativo: toda mudança de janela recalcula o momento das fotos do
-// retiro via calcularRetag — única fonte do re-tag, nunca SQL próprio aqui.
-async function aplicarRetag(db: D1Database, retiroId: number) {
-  const { results: fotos } = await db
-    .prepare("SELECT id, capturada_em, momento_id FROM fotos WHERE retiro_id = ?")
-    .bind(retiroId)
-    .all<FotoParaRetag>();
-  if (fotos.length === 0) return;
-
-  const { results: momentos } = await db
-    .prepare("SELECT id, inicio, fim FROM momentos WHERE retiro_id = ?")
-    .bind(retiroId)
-    .all<JanelaMomento>();
-
-  const mudancas = calcularRetag(fotos, momentos);
-  if (mudancas.length === 0) return;
-  await db.batch(
-    mudancas.map((m) =>
-      db
-        .prepare("UPDATE fotos SET momento_id = ? WHERE id = ?")
-        .bind(m.momentoId, m.fotoId),
-    ),
-  );
-}
-
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const db = context.get(contextoCloudflare).env.DB;
   const retiro = await carregarRetiro(db, params.edicao);
@@ -56,7 +31,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     .bind(retiro.id)
     .all<Momento>();
 
-  const dias = listarDias(retiro.data_inicio, retiro.data_fim);
+  const dias = listarDiasLogicos(retiro);
   const url = new URL(request.url);
   const diaParam = url.searchParams.get("dia");
   const diaAtivo = diaParam && dias.includes(diaParam) ? diaParam : dias[0];
@@ -187,11 +162,14 @@ export default function AdminCronograma({
       {erro && <p role="alert">{erro}</p>}
 
       <nav>
-        {dias.map((d) => (
-          <Link key={d} to={`?dia=${d}`}>
-            {d === diaAtivo ? <strong>[{d}]</strong> : d}
-          </Link>
-        ))}
+        {dias.map((d) => {
+          const rotulo = d === retiro.data_pre ? `Pré-retiro (${d})` : d;
+          return (
+            <Link key={d} to={`?dia=${d}`}>
+              {d === diaAtivo ? <strong>[{rotulo}]</strong> : rotulo}
+            </Link>
+          );
+        })}
       </nav>
 
       {avisos.length > 0 && (
