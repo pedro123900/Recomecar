@@ -5,6 +5,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
+    "test": "vitest run",
     "typecheck": "wrangler types && react-router typegen && tsc -b",
     "deploy": "npm run build && wrangler deploy",
     "preview": "npm run build && vite preview",
@@ -27,6 +28,7 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
     "vite": "^8.0.3",
+    "vitest": "^4.1.11",
     "wrangler": "^4.120.1"
   }
 }

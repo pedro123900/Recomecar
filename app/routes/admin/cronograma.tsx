@@ -6,6 +6,7 @@ import {
   listarDias,
   resolverDatetime,
 } from "~/lib/cronograma";
+import { calcularRetag, type FotoParaRetag, type JanelaMomento } from "~/lib/motor";
 import type { Momento, Retiro } from "~/lib/tipos";
 
 export function meta() {
@@ -19,6 +20,31 @@ async function carregarRetiro(db: D1Database, slug: string): Promise<Retiro> {
     .first<Retiro>();
   if (!retiro) throw new Response("Retiro não encontrado", { status: 404 });
   return retiro;
+}
+
+// Re-tag retroativo: toda mudança de janela recalcula o momento das fotos do
+// retiro via calcularRetag — única fonte do re-tag, nunca SQL próprio aqui.
+async function aplicarRetag(db: D1Database, retiroId: number) {
+  const { results: fotos } = await db
+    .prepare("SELECT id, capturada_em, momento_id FROM fotos WHERE retiro_id = ?")
+    .bind(retiroId)
+    .all<FotoParaRetag>();
+  if (fotos.length === 0) return;
+
+  const { results: momentos } = await db
+    .prepare("SELECT id, inicio, fim FROM momentos WHERE retiro_id = ?")
+    .bind(retiroId)
+    .all<JanelaMomento>();
+
+  const mudancas = calcularRetag(fotos, momentos);
+  if (mudancas.length === 0) return;
+  await db.batch(
+    mudancas.map((m) =>
+      db
+        .prepare("UPDATE fotos SET momento_id = ? WHERE id = ?")
+        .bind(m.momentoId, m.fotoId),
+    ),
+  );
 }
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
@@ -52,6 +78,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         .prepare("DELETE FROM momentos WHERE id = ? AND retiro_id = ?")
         .bind(Number(form.get("id")), retiro.id)
         .run();
+      await aplicarRetag(db, retiro.id);
       return { ok: true };
     }
 
@@ -101,6 +128,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       } else {
         await inserir.run();
       }
+      await aplicarRetag(db, retiro.id);
       return { ok: true };
     }
 
@@ -133,6 +161,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       } else {
         await atualizar.run();
       }
+      await aplicarRetag(db, retiro.id);
       return { ok: true };
     }
 
