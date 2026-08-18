@@ -20,6 +20,13 @@
 			"bucket_name": "recomecar-media"
 		}
 	],
+	// account ID não é segredo (aparece em qualquer URL do R2); os segredos
+	// (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) vivem em wrangler secret e
+	// .dev.vars, nunca aqui
+	"vars": {
+		"CF_ACCOUNT_ID": "be495b55e7241e2dbdd3a3628fe86f3e",
+		"R2_BUCKET": "recomecar-media"
+	},
 	"observability": {
 		"enabled": true
 	},

@@ -18,6 +18,21 @@ export interface Retiro {
   publicado: number;
 }
 
+export interface Foto {
+  id: number;
+  retiro_id: number;
+  arquivo_r2: string;
+  tipo: "foto" | "video";
+  capturada_em: string | null;
+  momento_id: number | null;
+  largura: number;
+  altura: number;
+  duracao: number | null;
+  aparelho_marca: string | null;
+  aparelho_modelo: string | null;
+  aparelho_serial: string | null;
+}
+
 export interface Momento {
   id: number;
   retiro_id: number;
