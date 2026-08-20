@@ -17,7 +17,11 @@
 	"r2_buckets": [
 		{
 			"binding": "MEDIA",
-			"bucket_name": "recomecar-media"
+			"bucket_name": "recomecar-media",
+			// dev/e2e: o binding lê o bucket REAL (o upload já escreve nele
+			// via URL assinada, sob _teste/); sem isso a rota /midia/* não
+			// acharia os objetos em dev. Só afeta dev — deploy ignora.
+			"remote": true
 		}
 	],
 	// account ID não é segredo (aparece em qualquer URL do R2); os segredos
@@ -25,7 +29,11 @@
 	// .dev.vars, nunca aqui
 	"vars": {
 		"CF_ACCOUNT_ID": "be495b55e7241e2dbdd3a3628fe86f3e",
-		"R2_BUCKET": "recomecar-media"
+		"R2_BUCKET": "recomecar-media",
+		// base pública da mídia (domínio custom do bucket). Vazia => tudo
+		// via rota Worker /midia/*. Preencher quando o domínio próprio
+		// existir (sequência no CLAUDE.md).
+		"MIDIA_URL_PUBLICA": ""
 	},
 	"observability": {
 		"enabled": true

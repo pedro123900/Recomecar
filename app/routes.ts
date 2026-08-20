@@ -6,6 +6,7 @@ export default [
   route("retiros/:edicao", "routes/retiro.tsx"),
   route("biblioteca", "routes/biblioteca.tsx"),
   route("musica", "routes/musica.tsx"),
+  route("midia/*", "routes/midia.ts"),
   route("admin", "routes/admin/index.tsx"),
   route("admin/retiros", "routes/admin/retiros.tsx"),
   route("admin/retiros/:edicao/cronograma", "routes/admin/cronograma.tsx"),

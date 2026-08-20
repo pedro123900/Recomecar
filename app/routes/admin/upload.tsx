@@ -5,6 +5,7 @@ import type { FotoParaGravar } from "./upload-acao";
 import { contextoCloudflare } from "~/lib/contexto";
 import { derivadasDeFoto, derivadasDeVideo } from "~/lib/derivadas.client";
 import { lerExif } from "~/lib/exif";
+import { CACHE_IMUTAVEL, disposicaoAnexo } from "~/lib/midia";
 import type { Retiro } from "~/lib/tipos";
 
 export function meta() {
@@ -82,21 +83,33 @@ export default function AdminUpload({ loaderData }: Route.ComponentProps) {
           ? { capturadaEm: null, marca: null, modelo: null, serial: null }
           : await lerExif(arquivo);
 
-        const put = (url: string, corpo: Blob | File, tipo: string) =>
-          fetch(url, {
-            method: "PUT",
-            headers: { "Content-Type": tipo },
-            body: corpo,
-          }).then((r) => {
+        const put = (
+          url: string,
+          corpo: Blob | File,
+          headers: Record<string, string>,
+        ) =>
+          fetch(url, { method: "PUT", headers, body: corpo }).then((r) => {
             if (!r.ok) throw new Error(`PUT ${r.status}`);
           });
+        // Headers extras viram metadata do objeto no R2 (CLAUDE.md, "Como a
+        // mídia é servida"): o original ganha o attachment com o nome real
+        // do arquivo; derivadas ganham o cache imutável para o modo público.
+        const headersOriginal = {
+          "Content-Type": arquivo.type,
+          "Content-Disposition": disposicaoAnexo(arquivo.name),
+          "Cache-Control": CACHE_IMUTAVEL,
+        };
+        const headersDerivada = (tipo: string) => ({
+          "Content-Type": tipo,
+          "Cache-Control": CACHE_IMUTAVEL,
+        });
 
         atualizar(i, "enviando ao R2");
         if (ehVideo) {
           const d = await derivadasDeVideo(arquivo);
-          await put(item.urls.original, arquivo, arquivo.type);
-          await put(item.urls.thumb, d.thumb.blob, d.thumb.contentType);
-          await put(item.urls.poster!, d.poster.blob, d.poster.contentType);
+          await put(item.urls.original, arquivo, headersOriginal);
+          await put(item.urls.thumb, d.thumb.blob, headersDerivada(d.thumb.contentType));
+          await put(item.urls.poster!, d.poster.blob, headersDerivada(d.poster.contentType));
           gravar.push({
             chaveOriginal: item.chaveOriginal,
             tipo: "video",
@@ -110,9 +123,9 @@ export default function AdminUpload({ loaderData }: Route.ComponentProps) {
           });
         } else {
           const d = await derivadasDeFoto(arquivo);
-          await put(item.urls.original, arquivo, arquivo.type);
-          await put(item.urls.thumb, d.thumb.blob, d.thumb.contentType);
-          await put(item.urls.media!, d.media.blob, d.media.contentType);
+          await put(item.urls.original, arquivo, headersOriginal);
+          await put(item.urls.thumb, d.thumb.blob, headersDerivada(d.thumb.contentType));
+          await put(item.urls.media!, d.media.blob, headersDerivada(d.media.contentType));
           gravar.push({
             chaveOriginal: item.chaveOriginal,
             tipo: "foto",

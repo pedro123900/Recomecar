@@ -13,5 +13,8 @@
 .dev.vars*
 worker-configuration.d.ts
 
+# artefatos do e2e via navegador (snapshots, fixtures locais)
+/.playwright-mcp/
+
 !.dev.vars.example
 !.env.example
