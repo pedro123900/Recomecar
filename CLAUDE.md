@@ -35,10 +35,18 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 | Framework | **React Router 8** (framework mode) — versão instalada pelo template oficial da Cloudflare. Não sugerir troca de framework. |
 | Hospedagem | Cloudflare Workers. Deploy em `https://recomecar.pedrovsilva.workers.dev` (URL provisória; domínio próprio virá). |
 | Banco | Cloudflare D1 — `recomecar-db`, binding `DB` no `wrangler.jsonc`. Schema inicial aplicado (migration `0001_schema_inicial.sql`, local e remoto, 14/08/2026). |
-| Mídia | Cloudflare R2 — bucket `recomecar-media` criado, binding `MEDIA` no `wrangler.jsonc`, deploy ativo. |
+| Mídia | Cloudflare R2 — bucket `recomecar-media` criado, binding `MEDIA` no `wrangler.jsonc`, deploy ativo. CORS do bucket (19/08/2026): PUT liberado para `http://localhost:5173` e `https://recomecar.pedrovsilva.workers.dev` — necessário para o upload direto do navegador. |
 | Auth do admin | Cloudflare Access no `/admin` — configurar **depois** que o domínio próprio existir (config de painel, não de código). Até lá, `/admin` fica sem proteção e **sem dados sensíveis**. |
 | Repositório | `github.com/pedro123900/Recomecar`, público, branch `main`. |
 | Ambiente do Pedro | Windows + Git Bash, Node **22.16.0** (RR8 pede ≥22.22 — hoje só warning; atualização pendente), projeto em `C:\Projetos\recomecar`. |
+
+## Comandos
+
+- `npm run dev` — dev server com bindings locais. **Reiniciar depois de mudar `.dev.vars`** (só lê no boot).
+- `npm test` — vitest (config própria em `vitest.config.ts`; o plugin Cloudflare do `vite.config.ts` quebra o runner).
+- `npm run typecheck`
+- `npx wrangler d1 migrations apply recomecar-db --local` (ou `--remote`)
+- `npx wrangler secret list` — conferir secrets sem nunca pedir os valores.
 
 ## Mapa de rotas (contrato — não alterar sem o Pedro)
 
@@ -69,7 +77,7 @@ Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os ca
 - **livros** — id, titulo, autor (opcional), descricao, capa, ordem.
 - **creditos** — id, retiro_id, nome, funcao (opcional), ordem.
 
-Chaves derivadas no R2 (thumb, média, poster) seguem convenção previsível a partir do id/chave do original — proponha a convenção na fatia vertical.
+Chaves R2 (convenção **ratificada em 18/08/2026**, implementada em `app/lib/chaves-r2.ts`): original em `<prefixo>/<slug>/originais/<ulid>.<ext>`; derivadas como função pura da chave do original, em `<prefixo>/<slug>/derivadas/<ulid>/{thumb,media,poster}` — **sem extensão**, Content-Type no metadata do objeto (o formato da thumb varia por navegador). Prefixo: `retiros` em produção; em dev/e2e `prefixoR2()` devolve **`_teste` — teste nunca escreve sob `retiros/`**.
 
 ## Motor de tags por cronograma (o coração — regras de negócio)
 
@@ -94,11 +102,13 @@ SET momento_id = (SELECT id FROM momentos m
 WHERE retiro_id = :retiro
 ```
 
+O bloco acima é **semântica de referência, não código a copiar**: a implementação é `calcularRetag`/`aplicarRetag` (`app/lib/motor.ts`, `app/lib/retag.server.ts`), **única fonte do re-tag — nunca duplicar SQL nas rotas**.
+
 **Regras expostas pelo cronograma real** (análise de uma edição passada, que validou o schema como está):
 
 - **Dia lógico ≠ dia de calendário** — confirmado na prática: a "sexta" vai até 1:30, o "sábado" até 0:00. Exibição e agrupamento por "Dia" no site vêm **sempre** do campo `dia` do momento, **nunca** de `date(capturada_em)`.
 - **Virada da meia-noite no construtor:** dentro de um dia lógico, horário digitado menor que o do momento anterior significa **+1 dia no calendário**, mantendo o dia lógico da aba. O último momento de cada dia tem o fim digitado manualmente (não há próximo para encadear).
-- **Sobreposição de janelas é legítima** — trilhas paralelas de encontristas × equipes existem no cronograma real. O construtor avisa, mas não bloqueia. Desempate determinístico do re-tag é **requisito da fase do motor**; o critério será definido na própria fase do motor. Não implementar agora.
+- **Sobreposição de janelas é legítima** — trilhas paralelas de encontristas × equipes existem no cronograma real. O construtor avisa, mas não bloqueia. Desempate do re-tag: **comportamento provisório implementado e testado** (menor `inicio`, depois menor `id`); o desempate definitivo continua aberto para a fase do motor — direção provável: janela mais específica.
 - **Bastidores herdam dia lógico pela faixa do dia** (do primeiro momento do dia N até o primeiro momento do dia N+1) — refinamento da fase do motor, não de schema.
 
 UX validada do construtor (especificação em texto; não há arquivo de mockup): abas por dia, encadeamento de horários, avisos de buraco/sobreposição, clonar edição anterior, prévia viva.
@@ -137,7 +147,7 @@ Svelte/SvelteKit + Vercel (banda paga, Hobby proíbe uso comercial, duas platafo
 
 ## Próximo marco: a fatia vertical do motor
 
-Sequência: migration do schema (**feita** — revisada pelo Pedro e aplicada local e remoto em 14/08/2026) → admin cru sobe ~20 fotos **reais** com EXIF verificado → EXIF lido → cruzamento com cronograma de teste → D1/R2 populados → grade simples exibe → download funciona.
+Sequência e estado (18/08/2026): migrations **0001–0004 aplicadas** local e remoto → admin cru de retiros + construtor de cronograma **pronto** → motor de tags com TDD e re-tag retroativo ligado no salvar **pronto** → upload sem campos **implementado** (EXIF real via exifr, derivadas no navegador, URL assinada; secrets R2 criados) → e2e do upload **passou em 19/08/2026** (15 checagens, incluindo re-tag retroativo ao editar janela — o critério de pronto — mais regressão do admin cru e 41 testes de unidade) → **falta:** grade simples exibe + download funciona (item 4) → ~20 fotos **reais** com EXIF verificado.
 
 **Critério de pronto (o teste de vida do projeto):** tags corretas nas fotos reais **+ re-tag retroativo funcionando ao editar uma janela do cronograma**. Enquanto isso não passa, nada de alargar escopo.
 
