@@ -65,6 +65,8 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 
 Menu público: **Retiros · Biblioteca · RecomeMusic** (rótulos decididos; path `/retiros` é fixo). Não existe seção "Eventos". Créditos da edição ficam no rodapé da página do retiro — sem rota própria. Lightbox de foto: overlay dentro de `/retiros/:edicao`, idealmente com URL compartilhável (query param ou rota filha) — detalhe de implementação livre.
 
+Rotas de recurso internas (ações de formulário, endpoints JSON — ex.: `/admin/retiros/:edicao/upload/acao`) são detalhe de implementação e **não entram neste mapa**, que é contrato de **páginas**. Podem ser criadas, movidas ou removidas sem consulta.
+
 ## Modelo de dados (schema-alvo)
 
 Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os campos abaixo são o contrato; detalhes de tipos/índices são seus.
@@ -113,12 +115,33 @@ O bloco acima é **semântica de referência, não código a copiar**: a impleme
 
 UX validada do construtor (especificação em texto; não há arquivo de mockup): abas por dia, encadeamento de horários, avisos de buraco/sobreposição, clonar edição anterior, prévia viva.
 
+## Modelo de organização do acervo (decisões fechadas em 20/08/2026)
+
+Três sistemas de organização convivem. **Todos são dado cadastrado no admin, nenhum hardcoded.** O upload continua **sem nenhum campo** — nada nesta fase muda isso.
+
+1. **Tempo do retiro** (existente): dias lógicos + momentos do cronograma; tag automática via EXIF (motor).
+2. **Preparação**: eventos avulsos datados por edição — nome + data + horário opcional (ex.: "Ação social — 23/08", "Adoração — 07/08"). O motor roda em **modo dia inteiro**, sem janelas de hora: EXIF caindo na data ⇒ a foto entra sozinha no evento. Dois eventos no mesmo dia: o horário desempata. Evento sem fotos: aparece vazio no admin e **some do público**.
+3. **Álbuns**: coleções curadas **fora do tempo**. Campos: nome, grupo opcional (**1 nível** de aninhamento — grupo "Equipes" contém álbum "Anjos"), cor opcional, **ordem manual**, flag **exclusivo**. Fotos entram por **curadoria no admin** (grade com seleção múltipla → adicionar/remover de álbum), **nunca no upload**.
+   - Não-exclusivo: a foto aparece no tempo **e** no álbum (ex.: Instagramáveis).
+   - **Exclusivo**: a foto sai de todas as grades temporais públicas e existe só no álbum (ex.: Partilhas, Equipes). `momento_id` permanece gravado — **dado é fato, exibição é escolha**; remover do álbum devolve a foto ao tempo sozinha.
+
+Regras acessórias (fechadas):
+
+- **Nomes de pessoas em álbuns públicos** ("Partilha Ana"): aceito conscientemente pelo Pedro — mesmo modelo do Drive que o grupo já usa. Não reabrir.
+- **Cor de álbum**: campo cor com seletor visual (paleta de corações nas cores usuais do grupo). O site renderiza **ícone de coração da Phosphor** pintado na cor — **emoji segue proibido na interface**; emoji digitado no nome recebe validação amigável apontando o campo cor.
+- **Destaques da capa da edição**: as primeiras 1–2 fotos do álbum "Instagramáveis", pela ordem manual.
+- **Upload — proteção de formatos**: arquivo que o navegador não processa (RAW `.cr2`/`.nef`, HEIF sem suporte no navegador do admin, etc.) é **rejeitado com aviso claro por arquivo** (nome + motivo), sem derrubar o lote e sem falha silenciosa. O acervo real contém esses formatos.
+
 ## Pipeline de mídia
 
 - Derivadas geradas **no navegador do admin durante o upload** (Workers não executam binário nativo — sharp/ffmpeg impossíveis no servidor):
   - Thumb ~**400px WebP** (fallback JPEG) para a grade; média ~**1600px** para o lightbox; **original preservado** para download.
   - Poster de vídeo: frame capturado via `<video>` + canvas.
   - EXIF lido com **exifr**. Upload direto ao R2 com **URLs assinadas**.
+- **Como a mídia é servida (decisão fechada em 20/08/2026):** destino é **URL pública estável do R2** (bucket com acesso público via domínio custom de mídia), com a rota Worker **`/midia/*`** (leitura do binding `MEDIA`) como suporte permanente — serve dev/e2e (bucket público não existe no ambiente local) e a produção até o domínio próprio existir. Tudo atrás do helper **`urlMidia(chave)`** com base configurável por env (ausente ⇒ rota Worker); o banco guarda **só chaves**, nunca URLs. GET assinado para exibição foi avaliado e descartado (URL rotativa mata o cache do navegador — custo real em dados móveis).
+  - **Privacidade — implicação aceita pelo Pedro (decisão fechada):** URL de mídia estável e pública é o mesmo modelo "Drive com link" que o grupo já opera — sem listagem pública, ULID não-enumerável, galeria `noindex`. Link de mídia copiado funciona fora do site; aceito, não reabrir.
+  - **Cache:** a rota `/midia/*` envia `Cache-Control: public, max-age=31536000, immutable` (a chave tem ULID; o objeto nunca muda) — mesmo no modo Worker, revisita não re-baixa nem re-invoca. O mesmo `Cache-Control` é gravado no metadata das derivadas no upload, para valer também no modo público.
+  - **Download do original:** `Content-Disposition: attachment` gravado no **metadata do original já no upload** (o original nunca é exibido inline; prepara o modo público) e enviado também pela rota Worker ao servir originais.
 - Grade: `loading="lazy"`, aspect-ratio reservado (zero layout shift), blur-up.
 - **Download individual apenas.** Sem ZIP/download em lote (decisão fechada).
 - **Sem marcação de pessoas em nenhuma forma** (nem campo no banco). **Reconhecimento facial descartado por LGPD** (biometria = dado sensível, art. 11; menores, art. 14). Não repropor, nem "versão light".
@@ -145,16 +168,24 @@ Rotas de galeria (`/retiros/:edicao`) com meta robots `noindex` e fora do sitema
 
 Svelte/SvelteKit + Vercel (banda paga, Hobby proíbe uso comercial, duas plataformas); S3/Supabase Storage para mídia (egress pago); Supabase free como banco (pausa após 7 dias inativo); sharp/ffmpeg no servidor (Workers sem binário nativo); reconhecimento facial (LGPD); NFC para photobooth (não dispara; solução satélite fora do caminho crítico: botão Bluetooth + MacroDroid em Android); UIColors (ficou pago; alternativas: Realtime Colors, tints.dev, Coolors); mockup via gerador de imagem (substituído pelo loop código + screenshot + crítica); identidades navy/teal e marrom/dourado (descartadas — a identidade atual, do Tuti, está no DESIGN.md).
 
-## Próximo marco: a fatia vertical do motor
+## Marco atual: galeria completa (fase pós-fatia)
 
-Sequência e estado (18/08/2026): migrations **0001–0004 aplicadas** local e remoto → admin cru de retiros + construtor de cronograma **pronto** → motor de tags com TDD e re-tag retroativo ligado no salvar **pronto** → upload sem campos **implementado** (EXIF real via exifr, derivadas no navegador, URL assinada; secrets R2 criados) → e2e do upload **passou em 19/08/2026** (15 checagens, incluindo re-tag retroativo ao editar janela — o critério de pronto — mais regressão do admin cru e 41 testes de unidade) → **falta:** grade simples exibe + download funciona (item 4) → ~20 fotos **reais** com EXIF verificado.
+A fatia vertical foi **concluída em 20/08/2026**: upload sem campos → motor de tags com re-tag retroativo (critério de pronto, e2e verde em 19/08) → grade crua com download e alt automático (verificada com Playwright em 20/08). Validação com ~20 fotos **reais** (EXIF verificado) permanece pendente do material do Pedro.
 
-**Critério de pronto (o teste de vida do projeto):** tags corretas nas fotos reais **+ re-tag retroativo funcionando ao editar uma janela do cronograma**. Enquanto isso não passa, nada de alargar escopo.
+A fase atual transforma a fatia no produto do lançamento, em **três blocos com gate de aprovação do Pedro entre cada um** (brainstorming curto no início de cada; regras do "Modelo de organização do acervo"):
 
-Depois da fatia: galeria pública completa → admin completo → aplicação do design (DESIGN.md) → semana final de teste com a equipe.
+- **Bloco A — galeria temporal completa** (mínimo do lançamento em 26/09): capa-hub em `/retiros/:edicao` (infos + destaques + duas portas), navegação por pastas (dias lógicos → momentos → grade), linha do tempo (blocos por momento, amostra com semente estável), chips de filtro combináveis numa grade única parametrizada, lightbox (média 1600, player de vídeo, download, URL compartilhável).
+- **Bloco B — Preparação**: migration (mostrar antes) + motor em modo dia inteiro com TDD + CRUD de eventos no admin + seção pública na capa-hub.
+- **Bloco C — Álbuns e curadoria**: migration (mostrar antes) + CRUD de álbuns e tela de curadoria no admin + seção pública (grupos, coração colorido) + exclusividade coberta por teste (foto em álbum exclusivo fora das grades temporais; removida, reaparece).
+
+Regras permanentes da fase: dados 100% sintéticos; sem design (DESIGN.md fica para a fase de skin) mas estrutura semântica correta e alt automático em tudo; verificação Playwright mobile-first (390px) antes de declarar bloco pronto; rotas novas só entram no mapa depois de aprovadas.
+
+Depois da fase: admin completo → aplicação do design (DESIGN.md) → semana final de teste com a equipe.
 
 ## Pendências fora do código (com dono — não são suas tarefas)
 
-- **Pedro:** material real (fotos originais com EXIF — WhatsApp destrói EXIF, tem que vir do arquivo original; cronograma real de uma edição passada; lista de livros com capa e descrição; link do álbum no Spotify; nomes dos créditos); links dos Google Drives + nome/série/padroeiro das 8 edições antigas (para os cards); domínio próprio; licença comercial da fonte More Sugar; Node ≥ 22.22; possível migração para conta Cloudflare do grupo (janela ideal: antes do upload em massa e do domínio); token de API do R2 (S3, escopo no bucket) para as URLs assinadas de upload — criar quando a fatia chegar nessa etapa, e guardar via `wrangler secret`, nunca no repositório.
+- **Pedro:** material real (fotos originais com EXIF — WhatsApp destrói EXIF, tem que vir do arquivo original; cronograma real de uma edição passada; lista de livros com capa e descrição; link do álbum no Spotify; nomes dos créditos); links dos Google Drives + nome/série/padroeiro das 8 edições antigas (para os cards); licença comercial da fonte More Sugar; Node ≥ 22.22.
+- **Sequência do domínio até o retiro (Pedro; prazo prático: início de setembro/2026):** domínio próprio apontado na conta Cloudflare atual (pessoal do Pedro) → domínio custom no bucket `recomecar-media` + Transform Rule com `X-Robots-Tag: noindex` no host de mídia → **só então o upload em massa**.
+- **Migração para conta Cloudflare do grupo: depois do retiro, sem prazo.** A coordenação quer avaliar a adesão do grupo antes de assumir a estrutura definitiva. É viável a qualquer momento: código no GitHub, D1 exporta/importa, cópia entre buckets sem custo de banda.
 - **Tuti:** carimbo final do `#F8E2C5` na primeira tela implementada; artes dos cards das edições; futuramente, layout tematizado do 9.
 - **Cloudflare Access** no `/admin`: configurar quando o domínio existir.
