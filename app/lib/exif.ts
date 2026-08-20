@@ -23,7 +23,7 @@ const texto = (v: unknown) => {
   return t === "" ? null : t;
 };
 
-// Sem EXIF utilizável => tudo null => a foto cai em "Geral / Bastidores".
+// Sem EXIF utilizável => tudo null => a foto cai em "Geral".
 // capturada_em NUNCA vem de mtime/lastModified (regra do schema).
 export async function lerExif(
   arquivo: Blob | ArrayBuffer | Uint8Array,

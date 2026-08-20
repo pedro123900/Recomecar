@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
+  amostraEstavel,
+  analisarFiltros,
+  blocosLinhaDoTempo,
+  condicoesGrade,
   dataPorExtensoPtBr,
+  diasDoRetiro,
   itemGaleria,
+  paginar,
   textoAlternativo,
   type LinhaFotoGaleria,
 } from "./galeria";
@@ -46,7 +52,7 @@ describe("textoAlternativo", () => {
     ).toBe("Vídeo — Luau, sábado, 26 de setembro de 2026, 9 Recomeçar");
   });
 
-  test("sem momento vira Geral / Bastidores, sem dia lógico", () => {
+  test("sem momento vira Geral, sem dia lógico", () => {
     expect(
       textoAlternativo({
         tipo: "foto",
@@ -54,7 +60,7 @@ describe("textoAlternativo", () => {
         momentoDia: null,
         retiroTitulo: "9 Recomeçar",
       }),
-    ).toBe("Foto — Geral / Bastidores, 9 Recomeçar");
+    ).toBe("Foto — Geral, 9 Recomeçar");
   });
 });
 
@@ -77,6 +83,10 @@ describe("itemGaleria", () => {
     const item = itemGaleria(linha(), "9 Recomeçar", "");
     expect(item.urlExibicao).toBe(
       "/midia/_teste/9-recomecar/derivadas/01ABC/thumb",
+    );
+    // lightbox: foto amplia para a média 1600
+    expect(item.urlAmpliada).toBe(
+      "/midia/_teste/9-recomecar/derivadas/01ABC/media",
     );
     expect(item.urlDownload).toBe(
       "/midia/_teste/9-recomecar/originais/01ABC.jpg",
@@ -103,16 +113,20 @@ describe("itemGaleria", () => {
       "/midia/_teste/9-recomecar/derivadas/01DEF/poster",
     );
     expect(item.tipo).toBe("video");
+    // lightbox: vídeo não tem média — o player toca o original
+    expect(item.urlAmpliada).toBe(
+      "/midia/_teste/9-recomecar/originais/01DEF.mp4",
+    );
   });
 
-  test("sem momento a legenda é Geral / Bastidores", () => {
+  test("sem momento a legenda é Geral", () => {
     const item = itemGaleria(
       linha({ momento_nome: null, momento_dia: null }),
       "9 Recomeçar",
       "",
     );
-    expect(item.legenda).toBe("Geral / Bastidores");
-    expect(item.alt).toBe("Foto — Geral / Bastidores, 9 Recomeçar");
+    expect(item.legenda).toBe("Geral");
+    expect(item.alt).toBe("Foto — Geral, 9 Recomeçar");
   });
 
   test("base pública entra nas duas URLs", () => {
@@ -123,5 +137,171 @@ describe("itemGaleria", () => {
     expect(item.urlDownload).toBe(
       "https://midia.exemplo.com/_teste/9-recomecar/originais/01ABC.jpg",
     );
+  });
+});
+
+describe("amostraEstavel", () => {
+  const itens = Array.from({ length: 20 }, (_, i) => i + 1);
+
+  test("mesma semente devolve sempre a mesma amostra", () => {
+    const a = amostraEstavel(itens, 3, "9-recomecar:7");
+    const b = amostraEstavel(itens, 3, "9-recomecar:7");
+    expect(a).toEqual(b);
+    expect(a).toHaveLength(3);
+  });
+
+  test("amostra preserva a ordem original dos itens", () => {
+    const a = amostraEstavel(itens, 5, "semente");
+    expect([...a].sort((x, y) => x - y)).toEqual(a);
+  });
+
+  test("sementes diferentes dão amostras diferentes", () => {
+    const a = amostraEstavel(itens, 3, "9-recomecar:7");
+    const b = amostraEstavel(itens, 3, "9-recomecar:8");
+    expect(a).not.toEqual(b);
+  });
+
+  test("n maior que a lista devolve a lista inteira", () => {
+    expect(amostraEstavel([1, 2], 5, "s")).toEqual([1, 2]);
+  });
+
+  test("lista vazia devolve vazio", () => {
+    expect(amostraEstavel([], 3, "s")).toEqual([]);
+  });
+});
+
+const RETIRO_DIAS = {
+  data_pre: "2099-09-19",
+  data_dia1: "2099-09-25",
+  data_dia2: "2099-09-26",
+  data_dia3: "2099-09-27",
+};
+
+describe("diasDoRetiro", () => {
+  test("com pré: quatro dias com ordinal, data e rótulo", () => {
+    expect(diasDoRetiro(RETIRO_DIAS)).toEqual([
+      { ordinal: "pre", data: "2099-09-19", rotulo: "Pré-retiro" },
+      { ordinal: "dia-1", data: "2099-09-25", rotulo: "Dia 1" },
+      { ordinal: "dia-2", data: "2099-09-26", rotulo: "Dia 2" },
+      { ordinal: "dia-3", data: "2099-09-27", rotulo: "Dia 3" },
+    ]);
+  });
+
+  test("sem pré: três dias", () => {
+    const dias = diasDoRetiro({ ...RETIRO_DIAS, data_pre: null });
+    expect(dias.map((d) => d.ordinal)).toEqual(["dia-1", "dia-2", "dia-3"]);
+  });
+});
+
+describe("analisarFiltros", () => {
+  const dias = diasDoRetiro(RETIRO_DIAS);
+
+  test("valores válidos passam normalizados", () => {
+    expect(
+      analisarFiltros({ dia: "dia-2", momento: "14", musica: "Aleluia" }, dias),
+    ).toEqual({ dia: "dia-2", momento: 14, musica: "Aleluia" });
+  });
+
+  test("momento geral é o valor especial", () => {
+    expect(analisarFiltros({ momento: "geral" }, dias)).toEqual({
+      momento: "geral",
+    });
+  });
+
+  test("valores inválidos são descartados em silêncio", () => {
+    expect(
+      analisarFiltros({ dia: "dia-9", momento: "abc", musica: "" }, dias),
+    ).toEqual({});
+  });
+
+  test("pre é ordinal válido só quando o retiro tem pré", () => {
+    expect(analisarFiltros({ dia: "pre" }, dias)).toEqual({ dia: "pre" });
+    const semPre = diasDoRetiro({ ...RETIRO_DIAS, data_pre: null });
+    expect(analisarFiltros({ dia: "pre" }, semPre)).toEqual({});
+  });
+});
+
+describe("condicoesGrade", () => {
+  const dias = diasDoRetiro(RETIRO_DIAS);
+  const faixas = [
+    { data: "2099-09-25", inicio: "2099-09-25 00:00:00", fim: "2099-09-26 08:00:00" },
+  ];
+
+  test("sem filtros: fragmento vazio", () => {
+    expect(condicoesGrade({}, faixas, dias)).toEqual({ sql: "", binds: [] });
+  });
+
+  test("dia filtra momentos do dia OU fotos sem momento na faixa herdada", () => {
+    expect(condicoesGrade({ dia: "dia-1" }, faixas, dias)).toEqual({
+      sql: "(m.dia = ? OR (f.momento_id IS NULL AND f.capturada_em >= ? AND f.capturada_em < ?))",
+      binds: ["2099-09-25", "2099-09-25 00:00:00", "2099-09-26 08:00:00"],
+    });
+  });
+
+  test("dia sem faixa correspondente filtra só pelos momentos do dia", () => {
+    expect(condicoesGrade({ dia: "dia-2" }, faixas, dias)).toEqual({
+      sql: "m.dia = ?",
+      binds: ["2099-09-26"],
+    });
+  });
+
+  test("momento geral filtra momento_id nulo", () => {
+    expect(condicoesGrade({ momento: "geral" }, faixas, dias)).toEqual({
+      sql: "f.momento_id IS NULL",
+      binds: [],
+    });
+  });
+
+  test("filtros combinam com AND", () => {
+    expect(
+      condicoesGrade({ momento: 14, musica: "Aleluia" }, faixas, dias),
+    ).toEqual({
+      sql: "f.momento_id = ? AND m.musica = ?",
+      binds: [14, "Aleluia"],
+    });
+  });
+});
+
+describe("paginar", () => {
+  test("primeira página por padrão", () => {
+    expect(paginar(300, undefined)).toEqual({ pagina: 1, paginas: 3, offset: 0 });
+  });
+
+  test("página do meio", () => {
+    expect(paginar(300, "2")).toEqual({ pagina: 2, paginas: 3, offset: 120 });
+  });
+
+  test("página fora do intervalo é grampeada", () => {
+    expect(paginar(300, "99").pagina).toBe(3);
+    expect(paginar(300, "0").pagina).toBe(1);
+    expect(paginar(300, "lixo").pagina).toBe(1);
+  });
+
+  test("acervo vazio tem uma página vazia", () => {
+    expect(paginar(0, undefined)).toEqual({ pagina: 1, paginas: 1, offset: 0 });
+  });
+});
+
+describe("blocosLinhaDoTempo", () => {
+  const momentos = [
+    { id: 2, nome: "Vigília", dia: "2099-09-25", inicio: "2099-09-25 22:00:00", musica: null },
+    { id: 1, nome: "Abertura", dia: "2099-09-25", inicio: "2099-09-25 18:00:00", musica: "Aleluia" },
+    { id: 3, nome: "Missa", dia: "2099-09-26", inicio: "2099-09-26 08:00:00", musica: null },
+  ];
+
+  test("blocos em ordem cronológica, só momentos com fotos", () => {
+    const blocos = blocosLinhaDoTempo(momentos, { 1: 5, 2: 0, 3: 2 });
+    expect(blocos.map((b) => b.nome)).toEqual(["Abertura", "Missa"]);
+    expect(blocos[0]).toEqual({
+      momentoId: 1,
+      nome: "Abertura",
+      dia: "2099-09-25",
+      musica: "Aleluia",
+      total: 5,
+    });
+  });
+
+  test("momento sem contagem registrada conta como zero", () => {
+    expect(blocosLinhaDoTempo(momentos, {})).toEqual([]);
   });
 });

@@ -54,7 +54,11 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 |---|---|
 | `/` | Home do grupo (apresentação) |
 | `/retiros` | Índice de retiros — cards das edições |
-| `/retiros/:edicao` | Página do retiro: infos básicas + galeria completa **na mesma página** (ex.: `9-recomecar`) |
+| `/retiros/:edicao` | Capa-hub da edição: infos + destaques + portas para as visões (ex.: `9-recomecar`) |
+| `/retiros/:edicao/pastas` | Pastas: dias lógicos com contagem |
+| `/retiros/:edicao/pastas/:dia` | Momentos do dia com contagem (`:dia` ∈ `pre`, `dia-1`, `dia-2`, `dia-3`) |
+| `/retiros/:edicao/linha-do-tempo` | Linha do tempo: blocos por momento com amostra estável |
+| `/retiros/:edicao/fotos` | Grade única parametrizada — `?dia=`, `?momento=` (`geral` = sem momento), `?musica=`, `?pagina=`, `?foto=` (lightbox) |
 | `/biblioteca` | Biblioteca (vitrine de livros) |
 | `/musica` | RecomeMusic (embed do álbum no Spotify) |
 | `/admin` | Painel admin |
@@ -63,7 +67,7 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 | `/admin/retiros/:edicao/upload` | Upload de mídia em lote |
 | `/admin/biblioteca` | Gestão da biblioteca |
 
-Menu público: **Retiros · Biblioteca · RecomeMusic** (rótulos decididos; path `/retiros` é fixo). Não existe seção "Eventos". Créditos da edição ficam no rodapé da página do retiro — sem rota própria. Lightbox de foto: overlay dentro de `/retiros/:edicao`, idealmente com URL compartilhável (query param ou rota filha) — detalhe de implementação livre.
+Menu público: **Retiros · Biblioteca · RecomeMusic** (rótulos decididos; path `/retiros` é fixo). Não existe seção "Eventos". Créditos da edição ficam no rodapé da página do retiro — sem rota própria. Lightbox de foto: overlay via `?foto=<id>` na grade (`/retiros/:edicao/fotos`), preservando filtros na URL compartilhável (decidido no Bloco A).
 
 Rotas de recurso internas (ações de formulário, endpoints JSON — ex.: `/admin/retiros/:edicao/upload/acao`) são detalhe de implementação e **não entram neste mapa**, que é contrato de **páginas**. Podem ser criadas, movidas ou removidas sem consulta.
 
@@ -75,7 +79,7 @@ Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os ca
   - **Regra das edições antigas:** edição com `link_drive` preenchido e sem mídia no acervo ⇒ o card em `/retiros` abre o Google Drive externo daquela edição (nova aba). A estrutura interna do site começa no 9 Recomeçar. **Não haverá backfill** — decisão fechada; os Drives antigos permanecem como a cópia daquelas edições.
 - **momentos** — id, retiro_id, nome, dia, inicio (datetime), fim (datetime), musica (opcional).
 - **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
-  - `momento_id = NULL` significa "fora de qualquer janela" ⇒ exibir e filtrar como **"Geral / Bastidores"**.
+  - `momento_id = NULL` significa "fora de qualquer janela" ⇒ exibir e filtrar como **"Geral"** (rótulo renomeado em 20/08/2026 — era "Geral / Bastidores"; conceito e `NULL` inalterados).
 - **livros** — id, titulo, autor (opcional), descricao, capa, ordem.
 - **creditos** — id, retiro_id, nome, funcao (opcional), ordem.
 
@@ -89,8 +93,8 @@ Regras fixas:
 
 - Janela **semiaberta**: `inicio <= capturada_em < fim`.
 - No construtor de cronograma, o fim de um momento = início do próximo (preenchido automaticamente).
-- Fallback: sem janela correspondente ⇒ `momento_id NULL` ⇒ "Geral / Bastidores".
-- **Pré-retiro é um dia lógico a mais do mesmo retiro** (`data_pre`, opcional; aba "Pré-retiro" no construtor): dia inteiro de programação no sábado anterior ao fim de semana do retiro, com momentos e tags normais — nada muda no upload. O **buraco de ~uma semana entre o pré e a sexta é normal**: fotos nesse intervalo caem em "Geral / Bastidores". Se as datas do retiro mudarem com cronograma existente, momentos com `dia` fora dos dias lógicos geram **aviso** ao salvar (não bloqueio) e o re-tag roda.
+- Fallback: sem janela correspondente ⇒ `momento_id NULL` ⇒ "Geral".
+- **Pré-retiro é um dia lógico a mais do mesmo retiro** (`data_pre`, opcional; aba "Pré-retiro" no construtor): dia inteiro de programação no sábado anterior ao fim de semana do retiro, com momentos e tags normais — nada muda no upload. O **buraco de ~uma semana entre o pré e a sexta é normal**: fotos nesse intervalo caem em "Geral", sem dia herdado. Se as datas do retiro mudarem com cronograma existente, momentos com `dia` fora dos dias lógicos geram **aviso** ao salvar (não bloqueio) e o re-tag roda.
 - **Offset de relógio por aparelho** aplicado a `capturada_em` **antes** do match (câmera com hora errada). O aparelho é identificado pelos metadados EXIF de câmera (marca, modelo e número de série quando existir); o sistema agrupa as fotos por aparelho automaticamente, e corrigir um aparelho corrige todas as fotos dele, independente de quem subiu ou em qual leva. O offset **não aparece no fluxo de upload** (que não tem campo nenhum): vive numa tela de manutenção do admin ("ajustar relógio de um aparelho"), usada apenas quando um erro de relógio for descoberto. A mitigação primária continua sendo o checklist pré-retiro: conferir data, hora e fuso de cada câmera antes da sexta-feira.
 - Vídeos podem guardar a data em campo EXIF diferente do de fotos — **testar com o equipamento real** quando o material chegar.
 - Atraso no retiro corrige-se **editando a janela no cronograma** ⇒ re-tag retroativo automático ao salvar:
@@ -111,7 +115,7 @@ O bloco acima é **semântica de referência, não código a copiar**: a impleme
 - **Dia lógico ≠ dia de calendário** — confirmado na prática: a "sexta" vai até 1:30, o "sábado" até 0:00. Exibição e agrupamento por "Dia" no site vêm **sempre** do campo `dia` do momento, **nunca** de `date(capturada_em)`.
 - **Virada da meia-noite no construtor:** dentro de um dia lógico, horário digitado menor que o do momento anterior significa **+1 dia no calendário**, mantendo o dia lógico da aba. O último momento de cada dia tem o fim digitado manualmente (não há próximo para encadear).
 - **Sobreposição de janelas é legítima** — trilhas paralelas de encontristas × equipes existem no cronograma real. O construtor avisa, mas não bloqueia. Desempate do re-tag: **comportamento provisório implementado e testado** (menor `inicio`, depois menor `id`); o desempate definitivo continua aberto para a fase do motor — direção provável: janela mais específica.
-- **Bastidores herdam dia lógico pela faixa do dia** (do primeiro momento do dia N até o primeiro momento do dia N+1) — refinamento da fase do motor, não de schema.
+- **Foto sem momento ("Geral") herda o dia lógico pela faixa do dia** — comportamento do Bloco A (decisão de 20/08/2026), computado na exibição, nada persiste no schema. **Não existe pasta "Geral" na navegação**: na visão por pastas a foto aparece na pasta do dia herdado, com a legenda "Geral" e o chip `?momento=geral` filtrável; a linha do tempo mostra **só momentos** (é a narrativa do cronograma). A faixa do dia N: do **primeiro momento do dia N** até o **primeiro momento do dia N+1**, com teto no **fim do dia de calendário seguinte** a N (a faixa do pré não engole a semana até a sexta; a madrugada pós-vigília e a manhã seguinte ao último dia pertencem ao dia). Complemento: foto **antes do primeiro momento** de um dia, no **mesmo dia de calendário** (chegada, montagem), pertence àquele dia. Fora de qualquer faixa (ou sem `capturada_em`) ⇒ "Geral" sem dia — aparece só na grade geral e no filtro `geral`.
 
 UX validada do construtor (especificação em texto; não há arquivo de mockup): abas por dia, encadeamento de horários, avisos de buraco/sobreposição, clonar edição anterior, prévia viva.
 
@@ -172,9 +176,11 @@ Svelte/SvelteKit + Vercel (banda paga, Hobby proíbe uso comercial, duas platafo
 
 A fatia vertical foi **concluída em 20/08/2026**: upload sem campos → motor de tags com re-tag retroativo (critério de pronto, e2e verde em 19/08) → grade crua com download e alt automático (verificada com Playwright em 20/08). Validação com ~20 fotos **reais** (EXIF verificado) permanece pendente do material do Pedro.
 
+**Estreia antecipada com conteúdo real:** a Holly já fotografa a preparação do 9° Recomeçar (primeira leva: uma adoração). Essas fotos serão o **primeiro conteúdo real do acervo** — cadastradas como evento de Preparação assim que o Bloco B existir, **para ficar** (não é teste descartável): o site estreia com a preparação do 9° antes do retiro, um ensaio geral com material real e apostas baixas. Regra operacional permanente: **a Holly guarda sempre os arquivos originais** — WhatsApp destrói EXIF. Até o Bloco B, um subconjunto dessas fotos serve apenas como material de verificação do pipeline (apagado depois, junto com os dados sintéticos).
+
 A fase atual transforma a fatia no produto do lançamento, em **três blocos com gate de aprovação do Pedro entre cada um** (brainstorming curto no início de cada; regras do "Modelo de organização do acervo"):
 
-- **Bloco A — galeria temporal completa** (mínimo do lançamento em 26/09): capa-hub em `/retiros/:edicao` (infos + destaques + duas portas), navegação por pastas (dias lógicos → momentos → grade), linha do tempo (blocos por momento, amostra com semente estável), chips de filtro combináveis numa grade única parametrizada, lightbox (média 1600, player de vídeo, download, URL compartilhável).
+- **Bloco A — galeria temporal completa** (mínimo do lançamento em 26/09): capa-hub em `/retiros/:edicao` (infos + destaques + duas portas), navegação por pastas (dias lógicos → momentos → grade), linha do tempo (blocos por momento, amostra com semente estável), chips de filtro combináveis numa grade única parametrizada (120/página), lightbox (média 1600, player de vídeo, download, URL compartilhável), **herança de dia por faixa** para fotos "Geral" (regra no Motor de tags) e renomeação "Geral / Bastidores" → "Geral".
 - **Bloco B — Preparação**: migration (mostrar antes) + motor em modo dia inteiro com TDD + CRUD de eventos no admin + seção pública na capa-hub.
 - **Bloco C — Álbuns e curadoria**: migration (mostrar antes) + CRUD de álbuns e tela de curadoria no admin + seção pública (grupos, coração colorido) + exclusividade coberta por teste (foto em álbum exclusivo fora das grades temporais; removida, reaparece).
 

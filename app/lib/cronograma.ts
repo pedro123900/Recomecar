@@ -10,7 +10,7 @@ export function adicionarDias(data: string, n: number): string {
 // Dias lógicos do retiro: datas EXPLÍCITAS, uma por dia — pré-retiro
 // opcional + três dias obrigatórios. Nenhuma inferência de intervalo: a
 // função só lista o que está preenchido, na ordem dos campos. O buraco de
-// ~uma semana entre o pré e a sexta é normal (fotos nele => Bastidores).
+// ~uma semana entre o pré e a sexta é normal (fotos nele => "Geral").
 export function listarDiasLogicos(retiro: {
   data_pre: string | null;
   data_dia1: string;

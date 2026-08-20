@@ -154,7 +154,7 @@ export default function AdminUpload({ loaderData }: Route.ComponentProps) {
         atualizar(
           i,
           g.momentoId === null
-            ? "gravado — Geral/Bastidores"
+            ? "gravado — Geral"
             : `gravado — momento ${g.momentoId}`,
         );
       }
@@ -187,7 +187,7 @@ export default function AdminUpload({ loaderData }: Route.ComponentProps) {
       <p>
         <small>
           Sem campo nenhum: o EXIF é lido do arquivo e o momento vem do
-          cronograma. Arquivo sem data utilizável cai em Geral/Bastidores.
+          cronograma. Arquivo sem data utilizável cai em Geral.
         </small>
       </p>
     </main>

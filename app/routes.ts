@@ -3,7 +3,11 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 export default [
   index("routes/home.tsx"),
   route("retiros", "routes/retiros.tsx"),
-  route("retiros/:edicao", "routes/retiro.tsx"),
+  route("retiros/:edicao", "routes/retiro/capa.tsx"),
+  route("retiros/:edicao/pastas", "routes/retiro/pastas.tsx"),
+  route("retiros/:edicao/pastas/:dia", "routes/retiro/pastas-dia.tsx"),
+  route("retiros/:edicao/linha-do-tempo", "routes/retiro/linha-do-tempo.tsx"),
+  route("retiros/:edicao/fotos", "routes/retiro/fotos.tsx"),
   route("biblioteca", "routes/biblioteca.tsx"),
   route("musica", "routes/musica.tsx"),
   route("midia/*", "routes/midia.ts"),
