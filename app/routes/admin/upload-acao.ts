@@ -2,7 +2,11 @@ import type { Route } from "./+types/upload-acao";
 import { assinarPut, prefixoR2 } from "~/lib/assinatura.server";
 import { chaveOriginal, chavesDerivadas } from "~/lib/chaves-r2";
 import { contextoCloudflare } from "~/lib/contexto";
-import { atribuirMomento, type JanelaMomento } from "~/lib/motor";
+import {
+  atribuirTemporal,
+  type EventoDia,
+  type JanelaMomento,
+} from "~/lib/motor";
 import type { Retiro } from "~/lib/tipos";
 import { ulid } from "~/lib/ulid";
 
@@ -82,22 +86,32 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     )
       .bind(retiro.id)
       .all<JanelaMomento>();
+    const { results: eventos } = await env.DB.prepare(
+      "SELECT id, data, horario FROM eventos WHERE retiro_id = ?",
+    )
+      .bind(retiro.id)
+      .all<EventoDia>();
     const itens = [];
     const comandos = [];
     for (const f of corpo.fotos ?? []) {
-      const momentoId = atribuirMomento(f.capturadaEm, momentos);
+      const { momentoId, eventoId } = atribuirTemporal(
+        f.capturadaEm,
+        momentos,
+        eventos,
+      );
       comandos.push(
         env.DB.prepare(
           `INSERT INTO fotos (retiro_id, arquivo_r2, tipo, capturada_em,
-             momento_id, largura, altura, duracao, aparelho_marca,
+             momento_id, evento_id, largura, altura, duracao, aparelho_marca,
              aparelho_modelo, aparelho_serial)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(
           retiro.id,
           f.chaveOriginal,
           f.tipo,
           f.capturadaEm,
           momentoId,
+          eventoId,
           f.largura,
           f.altura,
           f.duracao,
@@ -106,7 +120,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
           f.serial,
         ),
       );
-      itens.push({ chaveOriginal: f.chaveOriginal, momentoId });
+      itens.push({ chaveOriginal: f.chaveOriginal, momentoId, eventoId });
     }
     if (comandos.length > 0) await env.DB.batch(comandos);
     return Response.json({ gravadas: comandos.length, itens });

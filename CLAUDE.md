@@ -64,6 +64,7 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 | `/admin` | Painel admin |
 | `/admin/retiros` | Gestão de retiros (edições, tema, créditos) |
 | `/admin/retiros/:edicao/cronograma` | Construtor de cronograma |
+| `/admin/retiros/:edicao/preparacao` | Gestão de eventos de Preparação |
 | `/admin/retiros/:edicao/upload` | Upload de mídia em lote |
 | `/admin/biblioteca` | Gestão da biblioteca |
 
@@ -78,7 +79,8 @@ Formalizar na migration da fatia vertical (Pedro revisa antes de aplicar). Os ca
 - **retiros** — id, serie (`Recomeçar` | `Renascer`; existem as duas séries, não assumir regra além disso), numero, slug (ex.: `9-recomecar`), titulo, **dias lógicos como datas explícitas** (migration 0003): **data_pre (opcional, pré-retiro) + data_dia1, data_dia2, data_dia3 (obrigatórias)** — nenhuma inferência de intervalo; início/fim para exibição = dia1/dia3. O formato "pré opcional + 3 dias" é **estrutura do schema**: edição com número diferente de dias exigiria migration. Demais campos: padroeiro_nome, padroeiro_invocacao (opcional), **link_drive (opcional)**, tema (JSON com as cores da edição; ausente ⇒ tema padrão), publicado.
   - **Regra das edições antigas:** edição com `link_drive` preenchido e sem mídia no acervo ⇒ o card em `/retiros` abre o Google Drive externo daquela edição (nova aba). A estrutura interna do site começa no 9 Recomeçar. **Não haverá backfill** — decisão fechada; os Drives antigos permanecem como a cópia daquelas edições.
 - **momentos** — id, retiro_id, nome, dia, inicio (datetime), fim (datetime), musica (opcional).
-- **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
+- **eventos** (Preparação; migration 0005) — id, retiro_id, nome, data, horario (opcional — desempate encadeado). Regras no "Modelo de organização do acervo".
+- **fotos** (fotos e vídeos) — id, retiro_id, arquivo_r2 (chave do original), tipo (`foto` | `video`), capturada_em (do EXIF, **já com offset de relógio aplicado**), **momento_id (FK persistida — decisão fechada)**, **evento_id (FK da Preparação — exclusivo com momento_id por CHECK)**, largura, altura (para aspect-ratio reservado na grade), duracao (vídeos).
   - `momento_id = NULL` significa "fora de qualquer janela" ⇒ exibir e filtrar como **"Geral"** (rótulo renomeado em 20/08/2026 — era "Geral / Bastidores"; conceito e `NULL` inalterados).
 - **livros** — id, titulo, autor (opcional), descricao, capa, ordem.
 - **creditos** — id, retiro_id, nome, funcao (opcional), ordem.
@@ -124,7 +126,11 @@ UX validada do construtor (especificação em texto; não há arquivo de mockup)
 Três sistemas de organização convivem. **Todos são dado cadastrado no admin, nenhum hardcoded.** O upload continua **sem nenhum campo** — nada nesta fase muda isso.
 
 1. **Tempo do retiro** (existente): dias lógicos + momentos do cronograma; tag automática via EXIF (motor).
-2. **Preparação**: eventos avulsos datados por edição — nome + data + horário opcional (ex.: "Ação social — 23/08", "Adoração — 07/08"). O motor roda em **modo dia inteiro**, sem janelas de hora: EXIF caindo na data ⇒ a foto entra sozinha no evento. Dois eventos no mesmo dia: o horário desempata. Evento sem fotos: aparece vazio no admin e **some do público**.
+2. **Preparação**: eventos avulsos datados por edição — nome + data + horário opcional (ex.: "Ação social — 23/08", "Adoração — 07/08"). O motor roda em **modo dia inteiro**, sem janelas de hora: EXIF caindo na data ⇒ a foto entra sozinha no evento. Evento sem fotos: aparece vazio no admin e **some do público**. Decisões do gate do Bloco B (fechadas em 21/08/2026):
+   - **Desempate encadeado** com 2+ eventos na mesma data: a foto vai ao último evento com horário ≤ hora da captura; antes do primeiro horário ⇒ primeiro evento do dia. Validação do admin: 2+ eventos na mesma data exigem horário preenchido e distinto.
+   - **Precedência: momento vence.** O motor tenta as janelas do cronograma primeiro; só foto com momento NULL cai no modo dia inteiro. Evento em data de dia lógico do retiro gera **aviso** ao salvar, não bloqueio.
+   - **Sistema temporal único: cada foto vive em exatamente um sistema — momento → evento → Geral.** Foto de evento fica **fora** das pastas de dia, da linha do tempo e da herança de dia por faixa (estabilidade: o comportamento não pode depender de coincidência de data). Persistido em `fotos.evento_id`, mutuamente exclusivo com `momento_id` por CHECK; a transição evento→momento troca as duas colunas no mesmo UPDATE.
+   - **Público**: seção "Preparação" na capa-hub lista os eventos com foto (nome, data, contagem, amostra) linkando para a grade única com `?evento=<id>` — filtro excludente com `?dia`/`?momento`/`?musica`. Fotos de evento seguem na grade geral sem filtro (acervo cronológico). CRUD em `/admin/retiros/:edicao/preparacao`.
 3. **Álbuns**: coleções curadas **fora do tempo**. Campos: nome, grupo opcional (**1 nível** de aninhamento — grupo "Equipes" contém álbum "Anjos"), cor opcional, **ordem manual**, flag **exclusivo**. Fotos entram por **curadoria no admin** (grade com seleção múltipla → adicionar/remover de álbum), **nunca no upload**.
    - Não-exclusivo: a foto aparece no tempo **e** no álbum (ex.: Instagramáveis).
    - **Exclusivo**: a foto sai de todas as grades temporais públicas e existe só no álbum (ex.: Partilhas, Equipes). `momento_id` permanece gravado — **dado é fato, exibição é escolha**; remover do álbum devolve a foto ao tempo sozinha.

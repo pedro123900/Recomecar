@@ -24,13 +24,24 @@ export interface Foto {
   arquivo_r2: string;
   tipo: "foto" | "video";
   capturada_em: string | null;
+  // sistema temporal único (migration 0005): no máximo UM dos dois é não-nulo
   momento_id: number | null;
+  evento_id: number | null;
   largura: number;
   altura: number;
   duracao: number | null;
   aparelho_marca: string | null;
   aparelho_modelo: string | null;
   aparelho_serial: string | null;
+}
+
+// Evento de Preparação (migration 0005) — modo dia inteiro do motor.
+export interface Evento {
+  id: number;
+  retiro_id: number;
+  nome: string;
+  data: string;
+  horario: string | null;
 }
 
 export interface Momento {
