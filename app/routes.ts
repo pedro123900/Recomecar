@@ -14,6 +14,7 @@ export default [
   route("admin", "routes/admin/index.tsx"),
   route("admin/retiros", "routes/admin/retiros.tsx"),
   route("admin/retiros/:edicao/cronograma", "routes/admin/cronograma.tsx"),
+  route("admin/retiros/:edicao/preparacao", "routes/admin/preparacao.tsx"),
   route("admin/retiros/:edicao/upload", "routes/admin/upload.tsx"),
   route("admin/retiros/:edicao/upload/acao", "routes/admin/upload-acao.ts"),
   route("admin/biblioteca", "routes/admin/biblioteca.tsx"),

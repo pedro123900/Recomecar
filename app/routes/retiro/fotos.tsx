@@ -40,6 +40,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       dia: url.searchParams.get("dia") ?? undefined,
       momento: url.searchParams.get("momento") ?? undefined,
       musica: url.searchParams.get("musica") ?? undefined,
+      evento: url.searchParams.get("evento") ?? undefined,
     },
     dias,
   );
@@ -70,11 +71,19 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   )
     .bind(retiro.id)
     .all<{ id: number; nome: string }>();
+  // Geral = fora dos DOIS sistemas temporais (foto de evento não conta)
   const semMomento = await env.DB.prepare(
-    `SELECT COUNT(*) AS total FROM fotos WHERE retiro_id = ? AND momento_id IS NULL`,
+    `SELECT COUNT(*) AS total FROM fotos
+      WHERE retiro_id = ? AND momento_id IS NULL AND evento_id IS NULL`,
   )
     .bind(retiro.id)
     .first<{ total: number }>();
+  const { results: eventosComFotos } = await env.DB.prepare(
+    `SELECT e.id, e.nome FROM eventos e JOIN fotos f ON f.evento_id = e.id
+      WHERE e.retiro_id = ? GROUP BY e.id ORDER BY e.data, e.horario, e.id`,
+  )
+    .bind(retiro.id)
+    .all<{ id: number; nome: string }>();
   const { results: musicas } = await env.DB.prepare(
     `SELECT DISTINCT m.musica FROM momentos m JOIN fotos f ON f.momento_id = m.id
       WHERE m.retiro_id = ? AND m.musica IS NOT NULL ORDER BY m.musica`,
@@ -103,6 +112,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     itens,
     fotoIsolada,
     momentosComFotos,
+    eventosComFotos,
     temGeral: (semMomento?.total ?? 0) > 0,
     musicas: musicas.map((m) => m.musica),
   };
@@ -118,6 +128,7 @@ export default function Fotos({ loaderData }: Route.ComponentProps) {
     itens,
     fotoIsolada,
     momentosComFotos,
+    eventosComFotos,
     temGeral,
     musicas,
   } = loaderData;
@@ -133,9 +144,14 @@ export default function Fotos({ loaderData }: Route.ComponentProps) {
     const s = q.toString();
     return s ? `${caminho}?${s}` : caminho;
   };
-  // trocar filtro volta à página 1 e fecha o lightbox
+  // trocar filtro volta à página 1 e fecha o lightbox; evento (Preparação) é
+  // excludente com os filtros do tempo do retiro — ligar um desliga o outro
   const urlFiltro = (chave: string, valor: string | null) =>
-    url({ [chave]: valor, pagina: null, foto: null });
+    url(
+      chave === "evento"
+        ? { evento: valor, dia: null, momento: null, musica: null, pagina: null, foto: null }
+        : { [chave]: valor, evento: null, pagina: null, foto: null },
+    );
 
   const chip = (rotulo: string, chave: string, valor: string, ativo: boolean) => ({
     rotulo,
@@ -159,6 +175,12 @@ export default function Fotos({ loaderData }: Route.ComponentProps) {
     {
       titulo: "Música",
       chips: musicas.map((m) => chip(m, "musica", m, filtros.musica === m)),
+    },
+    {
+      titulo: "Preparação",
+      chips: eventosComFotos.map((e) =>
+        chip(e.nome, "evento", String(e.id), filtros.evento === e.id),
+      ),
     },
   ];
 

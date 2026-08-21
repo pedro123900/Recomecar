@@ -43,18 +43,28 @@ export function textoAlternativo(foto: {
   tipo: "foto" | "video";
   momentoNome: string | null;
   momentoDia: string | null;
+  // evento de Preparação (sistema temporal único: nunca coexiste com momento;
+  // se ambos chegarem, momento vence — mesmo desempate do motor)
+  eventoNome?: string | null;
+  eventoData?: string | null;
   retiroTitulo: string;
 }): string {
   const prefixo = foto.tipo === "video" ? "Vídeo" : "Foto";
-  const partes = [foto.momentoNome ?? "Geral"];
-  // sem momento não há dia lógico confiável (herança de dia pelos
-  // bastidores é refinamento da fase do motor)
-  if (foto.momentoDia) partes.push(dataPorExtensoPtBr(foto.momentoDia));
+  const partes: string[] = [];
+  if (foto.momentoNome) {
+    partes.push(foto.momentoNome);
+    if (foto.momentoDia) partes.push(dataPorExtensoPtBr(foto.momentoDia));
+  } else if (foto.eventoNome) {
+    partes.push(foto.eventoNome);
+    if (foto.eventoData) partes.push(dataPorExtensoPtBr(foto.eventoData));
+  } else {
+    partes.push("Geral");
+  }
   partes.push(foto.retiroTitulo);
   return `${prefixo} — ${partes.join(", ")}`;
 }
 
-// Linha do SELECT da grade (fotos LEFT JOIN momentos).
+// Linha do SELECT da grade (fotos LEFT JOIN momentos LEFT JOIN eventos).
 export interface LinhaFotoGaleria {
   id: number;
   arquivo_r2: string;
@@ -64,6 +74,8 @@ export interface LinhaFotoGaleria {
   duracao: number | null;
   momento_nome: string | null;
   momento_dia: string | null;
+  evento_nome: string | null;
+  evento_data: string | null;
 }
 
 export interface ItemGaleria {
@@ -95,11 +107,13 @@ export function itemGaleria(
     urlDownload: urlMidia(linha.arquivo_r2, basePublica),
     largura: linha.largura,
     altura: linha.altura,
-    legenda: linha.momento_nome ?? "Geral",
+    legenda: linha.momento_nome ?? linha.evento_nome ?? "Geral",
     alt: textoAlternativo({
       tipo: linha.tipo,
       momentoNome: linha.momento_nome,
       momentoDia: linha.momento_dia,
+      eventoNome: linha.evento_nome,
+      eventoData: linha.evento_data,
       retiroTitulo,
     }),
   };
@@ -175,19 +189,25 @@ export function diasDoRetiro(retiro: {
   return dias;
 }
 
-// Filtros da grade única (/retiros/:edicao/fotos). "geral" = sem momento.
+// Filtros da grade única (/retiros/:edicao/fotos). "geral" = fora dos dois
+// sistemas temporais. "evento" (Preparação) é excludente com os demais: foto
+// de evento tem momento null por construção — combinar não significa nada.
 export interface FiltrosGrade {
   dia?: OrdinalDia;
   momento?: number | "geral";
   musica?: string;
+  evento?: number;
 }
 
 // Query string crua -> filtros normalizados; valor inválido é descartado em
 // silêncio (chips geram URLs válidas; URL editada à mão não derruba a página).
 export function analisarFiltros(
-  brutos: { dia?: string; momento?: string; musica?: string },
+  brutos: { dia?: string; momento?: string; musica?: string; evento?: string },
   dias: DiaDoRetiro[],
 ): FiltrosGrade {
+  if (brutos.evento && /^[1-9]\d*$/.test(brutos.evento)) {
+    return { evento: Number(brutos.evento) };
+  }
   const filtros: FiltrosGrade = {};
   if (brutos.dia && dias.some((d) => d.ordinal === brutos.dia)) {
     filtros.dia = brutos.dia as OrdinalDia;
@@ -216,8 +236,10 @@ export function condicoesGrade(
     const data = dias.find((d) => d.ordinal === filtros.dia)!.data;
     const faixa = faixas.find((f) => f.data === data);
     if (faixa) {
+      // herança de faixa só alcança foto Geral: foto de evento fica fora
+      // (sistema temporal único)
       partes.push(
-        "(m.dia = ? OR (f.momento_id IS NULL AND f.capturada_em >= ? AND f.capturada_em < ?))",
+        "(m.dia = ? OR (f.momento_id IS NULL AND f.evento_id IS NULL AND f.capturada_em >= ? AND f.capturada_em < ?))",
       );
       binds.push(data, faixa.inicio, faixa.fim);
     } else {
@@ -226,7 +248,7 @@ export function condicoesGrade(
     }
   }
   if (filtros.momento === "geral") {
-    partes.push("f.momento_id IS NULL");
+    partes.push("f.momento_id IS NULL AND f.evento_id IS NULL");
   } else if (typeof filtros.momento === "number") {
     partes.push("f.momento_id = ?");
     binds.push(filtros.momento);
@@ -234,6 +256,10 @@ export function condicoesGrade(
   if (filtros.musica) {
     partes.push("m.musica = ?");
     binds.push(filtros.musica);
+  }
+  if (filtros.evento) {
+    partes.push("f.evento_id = ?");
+    binds.push(filtros.evento);
   }
   return { sql: partes.join(" AND "), binds };
 }

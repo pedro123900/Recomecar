@@ -39,9 +39,11 @@ export async function faixasDoRetiro(
 }
 
 export const COLUNAS_GRADE = `f.id, f.arquivo_r2, f.tipo, f.largura, f.altura, f.duracao,
-  m.nome AS momento_nome, m.dia AS momento_dia`;
+  m.nome AS momento_nome, m.dia AS momento_dia,
+  e.nome AS evento_nome, e.data AS evento_data`;
 
 export const DE_FOTOS = `FROM fotos f LEFT JOIN momentos m ON m.id = f.momento_id
+  LEFT JOIN eventos e ON e.id = f.evento_id
   WHERE f.retiro_id = ?`;
 
 // vídeos desta fase não têm capturada_em: vão para o fim, ordem estável
@@ -62,6 +64,41 @@ export async function itensPorIds(
     .bind(retiro.id, ...ids)
     .all<LinhaFotoGaleria>();
   return results.map((l) => itemGaleria(l, retiro.titulo, basePublica));
+}
+
+// Eventos de Preparação COM fotos (o público mostra o que tem; evento vazio
+// só aparece no admin), na ordem do dia: data, depois horário.
+export async function eventosComFotos(
+  db: D1Database,
+  retiro: Retiro,
+): Promise<{ id: number; nome: string; data: string; total: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT e.id, e.nome, e.data, COUNT(f.id) AS total
+         FROM eventos e JOIN fotos f ON f.evento_id = e.id
+        WHERE e.retiro_id = ?
+        GROUP BY e.id ORDER BY e.data, e.horario, e.id`,
+    )
+    .bind(retiro.id)
+    .all<{ id: number; nome: string; data: string; total: number }>();
+  return results;
+}
+
+// Ids das fotos de evento em ordem cronológica — base barata (só inteiros)
+// para as amostras estáveis da seção Preparação da capa.
+export async function idsPorEvento(
+  db: D1Database,
+  retiro: Retiro,
+): Promise<{ id: number; evento_id: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT f.id, f.evento_id FROM fotos f
+        WHERE f.retiro_id = ? AND f.evento_id IS NOT NULL
+        ORDER BY (f.capturada_em IS NULL), f.capturada_em, f.id`,
+    )
+    .bind(retiro.id)
+    .all<{ id: number; evento_id: number }>();
+  return results;
 }
 
 // Ids de todas as fotos do retiro em ordem cronológica, com o momento —

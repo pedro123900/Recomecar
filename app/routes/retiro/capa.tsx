@@ -5,9 +5,13 @@ import { contextoCloudflare } from "~/lib/contexto";
 import { amostraEstavel, dataPorExtensoPtBr } from "~/lib/galeria";
 import {
   carregarRetiroPublicado,
+  eventosComFotos,
+  idsPorEvento,
   idsPorMomento,
   itensPorIds,
 } from "~/lib/retiro-publico.server";
+
+const AMOSTRA_EVENTO = 2;
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
@@ -36,11 +40,41 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     env.MIDIA_URL_PUBLICA,
   );
 
-  return { retiro, total: ids.length, destaques };
+  // Preparação: eventos com foto, cada um com amostra estável
+  const eventos = await eventosComFotos(env.DB, retiro);
+  const idsEventos = await idsPorEvento(env.DB, retiro);
+  const porEvento = new Map<number, number[]>();
+  for (const f of idsEventos) {
+    const lista = porEvento.get(f.evento_id) ?? [];
+    lista.push(f.id);
+    porEvento.set(f.evento_id, lista);
+  }
+  const idsAmostras = eventos.flatMap((e) =>
+    amostraEstavel(
+      porEvento.get(e.id) ?? [],
+      AMOSTRA_EVENTO,
+      `preparacao:${retiro.slug}:${e.id}`,
+    ),
+  );
+  const itensAmostras = await itensPorIds(
+    env.DB,
+    retiro,
+    idsAmostras,
+    env.MIDIA_URL_PUBLICA,
+  );
+  const itemPorId = new Map(itensAmostras.map((i) => [i.id, i]));
+  const preparacao = eventos.map((e) => ({
+    ...e,
+    amostra: (porEvento.get(e.id) ?? [])
+      .filter((id) => itemPorId.has(id))
+      .map((id) => itemPorId.get(id)!),
+  }));
+
+  return { retiro, total: ids.length, destaques, preparacao };
 }
 
 export default function Capa({ loaderData }: Route.ComponentProps) {
-  const { retiro, total, destaques } = loaderData;
+  const { retiro, total, destaques, preparacao } = loaderData;
   const base = `/retiros/${retiro.slug}`;
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -71,6 +105,36 @@ export default function Capa({ loaderData }: Route.ComponentProps) {
             itens={destaques}
             urlItem={(item) => `${base}/fotos?foto=${item.id}`}
           />
+        </section>
+      )}
+
+      {preparacao.length > 0 && (
+        <section aria-label="Preparação" className="mt-6">
+          <h2 className="text-xl font-bold">Preparação</h2>
+          {preparacao.map((evento) => (
+            <section
+              key={evento.id}
+              aria-label={evento.nome}
+              className="mt-4"
+            >
+              <h3 className="font-bold">{evento.nome}</h3>
+              <p className="text-sm">{dataPorExtensoPtBr(evento.data)}</p>
+              <GradeFotos
+                itens={evento.amostra}
+                urlItem={(item) =>
+                  `${base}/fotos?evento=${evento.id}&foto=${item.id}`
+                }
+              />
+              <p className="mt-1">
+                <Link
+                  to={`${base}/fotos?evento=${evento.id}`}
+                  className="underline"
+                >
+                  Ver todas ({evento.total})
+                </Link>
+              </p>
+            </section>
+          ))}
         </section>
       )}
 

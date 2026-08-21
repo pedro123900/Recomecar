@@ -62,6 +62,32 @@ describe("textoAlternativo", () => {
       }),
     ).toBe("Foto — Geral, 9 Recomeçar");
   });
+
+  test("foto de evento de Preparação leva nome do evento e data", () => {
+    expect(
+      textoAlternativo({
+        tipo: "foto",
+        momentoNome: null,
+        momentoDia: null,
+        eventoNome: "Adoração",
+        eventoData: "2098-08-07",
+        retiroTitulo: "9 Recomeçar",
+      }),
+    ).toBe("Foto — Adoração, quinta-feira, 7 de agosto de 2098, 9 Recomeçar");
+  });
+
+  test("momento vence o evento no alt (sistema temporal único: nunca há os dois)", () => {
+    expect(
+      textoAlternativo({
+        tipo: "foto",
+        momentoNome: "Santa Missa",
+        momentoDia: "2026-09-27",
+        eventoNome: "Adoração",
+        eventoData: "2098-08-07",
+        retiroTitulo: "9 Recomeçar",
+      }),
+    ).toBe("Foto — Santa Missa, domingo, 27 de setembro de 2026, 9 Recomeçar");
+  });
 });
 
 function linha(sobrescrever: Partial<LinhaFotoGaleria> = {}): LinhaFotoGaleria {
@@ -74,6 +100,8 @@ function linha(sobrescrever: Partial<LinhaFotoGaleria> = {}): LinhaFotoGaleria {
     duracao: null,
     momento_nome: "Santa Missa",
     momento_dia: "2026-09-27",
+    evento_nome: null,
+    evento_data: null,
     ...sobrescrever,
   };
 }
@@ -127,6 +155,23 @@ describe("itemGaleria", () => {
     );
     expect(item.legenda).toBe("Geral");
     expect(item.alt).toBe("Foto — Geral, 9 Recomeçar");
+  });
+
+  test("foto de evento: legenda e alt vêm do evento", () => {
+    const item = itemGaleria(
+      linha({
+        momento_nome: null,
+        momento_dia: null,
+        evento_nome: "Ação social",
+        evento_data: "2098-08-23",
+      }),
+      "9 Recomeçar",
+      "",
+    );
+    expect(item.legenda).toBe("Ação social");
+    expect(item.alt).toBe(
+      "Foto — Ação social, sábado, 23 de agosto de 2098, 9 Recomeçar",
+    );
   });
 
   test("base pública entra nas duas URLs", () => {
@@ -219,6 +264,25 @@ describe("analisarFiltros", () => {
     const semPre = diasDoRetiro({ ...RETIRO_DIAS, data_pre: null });
     expect(analisarFiltros({ dia: "pre" }, semPre)).toEqual({});
   });
+
+  test("evento válido passa normalizado", () => {
+    expect(analisarFiltros({ evento: "51" }, dias)).toEqual({ evento: 51 });
+  });
+
+  test("evento é excludente: descarta dia, momento e música", () => {
+    expect(
+      analisarFiltros(
+        { evento: "51", dia: "dia-2", momento: "14", musica: "Aleluia" },
+        dias,
+      ),
+    ).toEqual({ evento: 51 });
+  });
+
+  test("evento inválido é descartado em silêncio (demais filtros valem)", () => {
+    expect(analisarFiltros({ evento: "abc", dia: "dia-2" }, dias)).toEqual({
+      dia: "dia-2",
+    });
+  });
 });
 
 describe("condicoesGrade", () => {
@@ -231,9 +295,9 @@ describe("condicoesGrade", () => {
     expect(condicoesGrade({}, faixas, dias)).toEqual({ sql: "", binds: [] });
   });
 
-  test("dia filtra momentos do dia OU fotos sem momento na faixa herdada", () => {
+  test("dia filtra momentos do dia OU fotos Geral na faixa herdada (foto de evento fica fora)", () => {
     expect(condicoesGrade({ dia: "dia-1" }, faixas, dias)).toEqual({
-      sql: "(m.dia = ? OR (f.momento_id IS NULL AND f.capturada_em >= ? AND f.capturada_em < ?))",
+      sql: "(m.dia = ? OR (f.momento_id IS NULL AND f.evento_id IS NULL AND f.capturada_em >= ? AND f.capturada_em < ?))",
       binds: ["2099-09-25", "2099-09-25 00:00:00", "2099-09-26 08:00:00"],
     });
   });
@@ -245,10 +309,17 @@ describe("condicoesGrade", () => {
     });
   });
 
-  test("momento geral filtra momento_id nulo", () => {
+  test("momento geral filtra fora dos DOIS sistemas (foto de evento não é Geral)", () => {
     expect(condicoesGrade({ momento: "geral" }, faixas, dias)).toEqual({
-      sql: "f.momento_id IS NULL",
+      sql: "f.momento_id IS NULL AND f.evento_id IS NULL",
       binds: [],
+    });
+  });
+
+  test("filtro de evento filtra evento_id", () => {
+    expect(condicoesGrade({ evento: 51 }, faixas, dias)).toEqual({
+      sql: "f.evento_id = ?",
+      binds: [51],
     });
   });
 
