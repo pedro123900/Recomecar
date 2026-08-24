@@ -18,7 +18,11 @@ import {
   DE_FOTOS,
   ORDEM_CRONOLOGICA,
   carregarRetiroPublicado,
+  eventosComFotos as consultarEventosComFotos,
   faixasDoRetiro,
+  momentosComFotos as consultarMomentosComFotos,
+  musicasComFotos,
+  temGeral as consultarTemGeral,
 } from "~/lib/retiro-publico.server";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -64,32 +68,12 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     itemGaleria(l, retiro.titulo, env.MIDIA_URL_PUBLICA),
   );
 
-  // dados dos chips: só o que existe no acervo
-  const { results: momentosComFotos } = await env.DB.prepare(
-    `SELECT m.id, m.nome FROM momentos m JOIN fotos f ON f.momento_id = m.id
-      WHERE m.retiro_id = ? GROUP BY m.id ORDER BY m.inicio`,
-  )
-    .bind(retiro.id)
-    .all<{ id: number; nome: string }>();
-  // Geral = fora dos DOIS sistemas temporais (foto de evento não conta)
-  const semMomento = await env.DB.prepare(
-    `SELECT COUNT(*) AS total FROM fotos
-      WHERE retiro_id = ? AND momento_id IS NULL AND evento_id IS NULL`,
-  )
-    .bind(retiro.id)
-    .first<{ total: number }>();
-  const { results: eventosComFotos } = await env.DB.prepare(
-    `SELECT e.id, e.nome FROM eventos e JOIN fotos f ON f.evento_id = e.id
-      WHERE e.retiro_id = ? GROUP BY e.id ORDER BY e.data, e.horario, e.id`,
-  )
-    .bind(retiro.id)
-    .all<{ id: number; nome: string }>();
-  const { results: musicas } = await env.DB.prepare(
-    `SELECT DISTINCT m.musica FROM momentos m JOIN fotos f ON f.momento_id = m.id
-      WHERE m.retiro_id = ? AND m.musica IS NOT NULL ORDER BY m.musica`,
-  )
-    .bind(retiro.id)
-    .all<{ musica: string }>();
+  // dados dos chips: só o que existe no acervo público (helpers centralizados
+  // em retiro-publico.server — exclusão de álbum exclusivo embutida)
+  const momentosComFotos = await consultarMomentosComFotos(env.DB, retiro);
+  const eventosComFotos = await consultarEventosComFotos(env.DB, retiro);
+  const musicas = await musicasComFotos(env.DB, retiro);
+  const temGeral = await consultarTemGeral(env.DB, retiro);
 
   // lightbox: foto pedida fora da página atual (URL manual) abre isolada
   const fotoBruta = url.searchParams.get("foto");
@@ -113,8 +97,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     fotoIsolada,
     momentosComFotos,
     eventosComFotos,
-    temGeral: (semMomento?.total ?? 0) > 0,
-    musicas: musicas.map((m) => m.musica),
+    temGeral,
+    musicas,
   };
 }
 
