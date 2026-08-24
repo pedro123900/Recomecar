@@ -10,6 +10,7 @@ import {
   DE_FOTOS,
   carregarRetiroPublicado,
   faixasDoRetiro,
+  momentosDoDiaComFotos,
 } from "~/lib/retiro-publico.server";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -28,15 +29,9 @@ export async function loader({ context, params }: Route.LoaderArgs) {
   const dia = dias.find((d) => d.ordinal === params.dia);
   if (!dia) throw new Response("Dia não encontrado", { status: 404 });
 
-  // pastas de momento: só as que têm fotos (o público mostra o que tem)
-  const { results: momentos } = await env.DB.prepare(
-    `SELECT m.id, m.nome, m.inicio, COUNT(f.id) AS total
-       FROM momentos m JOIN fotos f ON f.momento_id = m.id
-      WHERE m.retiro_id = ? AND m.dia = ?
-      GROUP BY m.id ORDER BY m.inicio`,
-  )
-    .bind(retiro.id, dia.data)
-    .all<{ id: number; nome: string; inicio: string; total: number }>();
+  // pastas de momento: só as que têm fotos (o público mostra o que tem;
+  // exclusão de álbum exclusivo embutida no helper)
+  const momentos = await momentosDoDiaComFotos(env.DB, retiro, dia.data);
 
   // total do dia inclui as fotos sem momento herdadas pela faixa
   const faixas = await faixasDoRetiro(env.DB, retiro);
