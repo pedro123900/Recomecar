@@ -192,19 +192,31 @@ export function diasDoRetiro(retiro: {
 // Filtros da grade única (/retiros/:edicao/fotos). "geral" = fora dos dois
 // sistemas temporais. "evento" (Preparação) é excludente com os demais: foto
 // de evento tem momento null por construção — combinar não significa nada.
+// "album" (Bloco C) idem, e ainda mais forte: é sobreposição curada, fora do
+// tempo, com ordem manual — excludente com tudo, inclusive com o evento.
 export interface FiltrosGrade {
   dia?: OrdinalDia;
   momento?: number | "geral";
   musica?: string;
   evento?: number;
+  album?: number;
 }
 
 // Query string crua -> filtros normalizados; valor inválido é descartado em
 // silêncio (chips geram URLs válidas; URL editada à mão não derruba a página).
 export function analisarFiltros(
-  brutos: { dia?: string; momento?: string; musica?: string; evento?: string },
+  brutos: {
+    dia?: string;
+    momento?: string;
+    musica?: string;
+    evento?: string;
+    album?: string;
+  },
   dias: DiaDoRetiro[],
 ): FiltrosGrade {
+  if (brutos.album && /^[1-9]\d*$/.test(brutos.album)) {
+    return { album: Number(brutos.album) };
+  }
   if (brutos.evento && /^[1-9]\d*$/.test(brutos.evento)) {
     return { evento: Number(brutos.evento) };
   }

@@ -202,6 +202,7 @@ export default function AdminRetiros({
                 <Link to={`/admin/retiros/${r.slug}/preparacao`}>
                   Preparação
                 </Link>{" "}
+                <Link to={`/admin/retiros/${r.slug}/albuns`}>Álbuns</Link>{" "}
                 <Form
                   method="post"
                   style={{ display: "inline" }}

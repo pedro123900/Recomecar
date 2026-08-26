@@ -9,7 +9,7 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 ## Restrições permanentes (invioláveis)
 
 - **Custo ~zero ancorado no egress gratuito do R2.** Nenhuma proposta pode introduzir cobrança de banda. Mídia é R2, ponto.
-- **Prazo fixo:** o 9 Recomeçar acontece em **25–27/09/2026** e não move.
+- **Prazo fixo:** o 9 Recomeçar acontece em **26–28/09/2026** (pré-retiro em **19/09/2026**) e não move.
 - **Público interno**, ~600 pessoas, acesso majoritariamente por **celular**. Mobile-first em tudo que é público.
 - **Site aberto, sem senha.** Galeria com `noindex` e fora do sitemap; home institucional indexável.
 - **Privacidade com menores de idade** pesa em toda decisão (é o motivo do descarte de reconhecimento facial).
@@ -58,13 +58,15 @@ Site oficial do **Grupo Recomeçar**, grupo jovem católico da Paróquia São Pe
 | `/retiros/:edicao/pastas` | Pastas: dias lógicos com contagem |
 | `/retiros/:edicao/pastas/:dia` | Momentos do dia com contagem (`:dia` ∈ `pre`, `dia-1`, `dia-2`, `dia-3`) |
 | `/retiros/:edicao/linha-do-tempo` | Linha do tempo: blocos por momento com amostra estável |
-| `/retiros/:edicao/fotos` | Grade única parametrizada — `?dia=`, `?momento=` (`geral` = sem momento), `?musica=`, `?pagina=`, `?foto=` (lightbox) |
+| `/retiros/:edicao/fotos` | Grade única parametrizada — `?dia=`, `?momento=` (`geral` = sem momento), `?musica=`, `?pagina=`, `?foto=` (lightbox); excludentes com tudo: `?evento=` (Preparação) e `?album=` (álbum curado, ordem manual) |
 | `/biblioteca` | Biblioteca (vitrine de livros) |
 | `/musica` | RecomeMusic (embed do álbum no Spotify) |
 | `/admin` | Painel admin |
 | `/admin/retiros` | Gestão de retiros (edições, tema, créditos) |
 | `/admin/retiros/:edicao/cronograma` | Construtor de cronograma |
 | `/admin/retiros/:edicao/preparacao` | Gestão de eventos de Preparação |
+| `/admin/retiros/:edicao/albuns` | Gestão de álbuns (CRUD) |
+| `/admin/retiros/:edicao/albuns/:album` | Curadoria do álbum: seleção múltipla sobre o acervo inteiro + ordem manual |
 | `/admin/retiros/:edicao/upload` | Upload de mídia em lote |
 | `/admin/biblioteca` | Gestão da biblioteca |
 
@@ -139,7 +141,8 @@ Regras acessórias (fechadas):
 
 - **Nomes de pessoas em álbuns públicos** ("Partilha Ana"): aceito conscientemente pelo Pedro — mesmo modelo do Drive que o grupo já usa. Não reabrir.
 - **Cor de álbum**: campo cor com seletor visual (paleta de corações nas cores usuais do grupo). O site renderiza **ícone de coração da Phosphor** pintado na cor — **emoji segue proibido na interface**; emoji digitado no nome recebe validação amigável apontando o campo cor.
-- **Destaques da capa da edição**: as primeiras 1–2 fotos do álbum "Instagramáveis", pela ordem manual.
+- **Destaques da capa da edição**: as primeiras 1–2 fotos do álbum "Instagramáveis", pela ordem manual. **Identificação por nome normalizado** (sem caixa/acento — decisão de 26/08/2026): zero migration; renomear desfaz o vínculo em silêncio e a capa cai no fallback (amostra estável temporal) — por isso a dica fixa na tela do admin. A consulta de álbum é sobreposição curada: **não** leva o fragmento de exclusão; o fallback é temporal e leva.
+- **Seção pública de álbuns na capa-hub** (26/08/2026): agrupada por grupo (grupo na posição do seu primeiro álbum), coração Phosphor pintado na cor do álbum, linkando para a grade única com `?album=<id>` (excludente com todos os filtros; ordem manual da curadoria). Álbum vazio some do público, como evento.
 - **Upload — proteção de formatos**: arquivo que o navegador não processa (RAW `.cr2`/`.nef`, HEIF sem suporte no navegador do admin, etc.) é **rejeitado com aviso claro por arquivo** (nome + motivo), sem derrubar o lote e sem falha silenciosa. O acervo real contém esses formatos.
 
 ## Pipeline de mídia

@@ -15,6 +15,12 @@ export default [
   route("admin/retiros", "routes/admin/retiros.tsx"),
   route("admin/retiros/:edicao/cronograma", "routes/admin/cronograma.tsx"),
   route("admin/retiros/:edicao/preparacao", "routes/admin/preparacao.tsx"),
+  route("admin/retiros/:edicao/albuns", "routes/admin/albuns.tsx"),
+  route("admin/retiros/:edicao/albuns/:album", "routes/admin/albuns-album.tsx"),
+  route(
+    "admin/retiros/:edicao/albuns/:album/acao",
+    "routes/admin/albuns-acao.ts",
+  ),
   route("admin/retiros/:edicao/upload", "routes/admin/upload.tsx"),
   route("admin/retiros/:edicao/upload/acao", "routes/admin/upload-acao.ts"),
   route("admin/biblioteca", "routes/admin/biblioteca.tsx"),

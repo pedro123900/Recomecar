@@ -3,6 +3,12 @@ import type { Route } from "./+types/fotos";
 import { ChipsFiltros, type GrupoDeChips } from "~/componentes/chips-filtros";
 import { GradeFotos } from "~/componentes/grade-fotos";
 import { Lightbox } from "~/componentes/lightbox";
+import {
+  albunsComFotos,
+  contarFotosDoAlbum,
+  itemDoAlbumPorId,
+  itensDoAlbum,
+} from "~/lib/albuns.server";
 import { contextoCloudflare } from "~/lib/contexto";
 import {
   FOTOS_POR_PAGINA,
@@ -11,6 +17,7 @@ import {
   diasDoRetiro,
   itemGaleria,
   paginar,
+  type ItemGaleria,
   type LinhaFotoGaleria,
 } from "~/lib/galeria";
 import {
@@ -45,46 +52,79 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       momento: url.searchParams.get("momento") ?? undefined,
       musica: url.searchParams.get("musica") ?? undefined,
       evento: url.searchParams.get("evento") ?? undefined,
+      album: url.searchParams.get("album") ?? undefined,
     },
     dias,
   );
-  const cond = condicoesGrade(filtros, faixas, dias);
-  const onde = cond.sql ? ` AND ${cond.sql}` : "";
 
-  const contagem = await env.DB.prepare(
-    `SELECT COUNT(*) AS total ${DE_FOTOS}${onde}`,
-  )
-    .bind(retiro.id, ...cond.binds)
-    .first<{ total: number }>();
-  const total = contagem?.total ?? 0;
-  const pag = paginar(total, url.searchParams.get("pagina") ?? undefined);
-
-  const { results } = await env.DB.prepare(
-    `SELECT ${COLUNAS_GRADE} ${DE_FOTOS}${onde} ${ORDEM_CRONOLOGICA} LIMIT ? OFFSET ?`,
-  )
-    .bind(retiro.id, ...cond.binds, FOTOS_POR_PAGINA, pag.offset)
-    .all<LinhaFotoGaleria>();
-  const itens = results.map((l) =>
-    itemGaleria(l, retiro.titulo, env.MIDIA_URL_PUBLICA),
-  );
+  const paginaBruta = url.searchParams.get("pagina") ?? undefined;
+  let total: number;
+  let pag: ReturnType<typeof paginar>;
+  let itens: ItemGaleria[];
+  if (filtros.album) {
+    // álbum é sobreposição curada: consulta própria (albuns.server), ordem
+    // manual da curadoria e SEM o fragmento de exclusão — a grade do álbum é
+    // exatamente onde foto de álbum exclusivo aparece
+    total = await contarFotosDoAlbum(env.DB, retiro, filtros.album);
+    pag = paginar(total, paginaBruta);
+    itens = await itensDoAlbum(
+      env.DB,
+      retiro,
+      filtros.album,
+      env.MIDIA_URL_PUBLICA,
+      FOTOS_POR_PAGINA,
+      pag.offset,
+    );
+  } else {
+    const cond = condicoesGrade(filtros, faixas, dias);
+    const onde = cond.sql ? ` AND ${cond.sql}` : "";
+    const contagem = await env.DB.prepare(
+      `SELECT COUNT(*) AS total ${DE_FOTOS}${onde}`,
+    )
+      .bind(retiro.id, ...cond.binds)
+      .first<{ total: number }>();
+    total = contagem?.total ?? 0;
+    pag = paginar(total, paginaBruta);
+    const { results } = await env.DB.prepare(
+      `SELECT ${COLUNAS_GRADE} ${DE_FOTOS}${onde} ${ORDEM_CRONOLOGICA} LIMIT ? OFFSET ?`,
+    )
+      .bind(retiro.id, ...cond.binds, FOTOS_POR_PAGINA, pag.offset)
+      .all<LinhaFotoGaleria>();
+    itens = results.map((l) =>
+      itemGaleria(l, retiro.titulo, env.MIDIA_URL_PUBLICA),
+    );
+  }
 
   // dados dos chips: só o que existe no acervo público (helpers centralizados
-  // em retiro-publico.server — exclusão de álbum exclusivo embutida)
+  // em retiro-publico.server — exclusão de álbum exclusivo embutida; os
+  // álbuns vêm do módulo curado, sem o fragmento, de propósito)
   const momentosComFotos = await consultarMomentosComFotos(env.DB, retiro);
   const eventosComFotos = await consultarEventosComFotos(env.DB, retiro);
   const musicas = await musicasComFotos(env.DB, retiro);
   const temGeral = await consultarTemGeral(env.DB, retiro);
+  const albunsPublicos = await albunsComFotos(env.DB, retiro);
 
-  // lightbox: foto pedida fora da página atual (URL manual) abre isolada
+  // lightbox: foto pedida fora da página atual (URL manual) abre isolada —
+  // no contexto do álbum quando o filtro é de álbum
   const fotoBruta = url.searchParams.get("foto");
   let fotoIsolada = null;
   if (fotoBruta && /^\d+$/.test(fotoBruta) && !itens.some((i) => i.id === Number(fotoBruta))) {
-    const linha = await env.DB.prepare(
-      `SELECT ${COLUNAS_GRADE} ${DE_FOTOS} AND f.id = ?`,
-    )
-      .bind(retiro.id, Number(fotoBruta))
-      .first<LinhaFotoGaleria>();
-    if (linha) fotoIsolada = itemGaleria(linha, retiro.titulo, env.MIDIA_URL_PUBLICA);
+    if (filtros.album) {
+      fotoIsolada = await itemDoAlbumPorId(
+        env.DB,
+        retiro,
+        filtros.album,
+        Number(fotoBruta),
+        env.MIDIA_URL_PUBLICA,
+      );
+    } else {
+      const linha = await env.DB.prepare(
+        `SELECT ${COLUNAS_GRADE} ${DE_FOTOS} AND f.id = ?`,
+      )
+        .bind(retiro.id, Number(fotoBruta))
+        .first<LinhaFotoGaleria>();
+      if (linha) fotoIsolada = itemGaleria(linha, retiro.titulo, env.MIDIA_URL_PUBLICA);
+    }
   }
 
   return {
@@ -99,6 +139,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     eventosComFotos,
     temGeral,
     musicas,
+    albunsPublicos,
   };
 }
 
@@ -115,6 +156,7 @@ export default function Fotos({ loaderData }: Route.ComponentProps) {
     eventosComFotos,
     temGeral,
     musicas,
+    albunsPublicos,
   } = loaderData;
   const [params] = useSearchParams();
   const caminho = `/retiros/${retiro.slug}/fotos`;
@@ -128,13 +170,14 @@ export default function Fotos({ loaderData }: Route.ComponentProps) {
     const s = q.toString();
     return s ? `${caminho}?${s}` : caminho;
   };
-  // trocar filtro volta à página 1 e fecha o lightbox; evento (Preparação) é
-  // excludente com os filtros do tempo do retiro — ligar um desliga o outro
+  // trocar filtro volta à página 1 e fecha o lightbox; evento (Preparação) e
+  // album (curadoria) são excludentes com tudo, inclusive entre si — ligar um
+  // desliga todos os outros
   const urlFiltro = (chave: string, valor: string | null) =>
     url(
-      chave === "evento"
-        ? { evento: valor, dia: null, momento: null, musica: null, pagina: null, foto: null }
-        : { [chave]: valor, evento: null, pagina: null, foto: null },
+      chave === "evento" || chave === "album"
+        ? { evento: null, album: null, [chave]: valor, dia: null, momento: null, musica: null, pagina: null, foto: null }
+        : { [chave]: valor, evento: null, album: null, pagina: null, foto: null },
     );
 
   const chip = (rotulo: string, chave: string, valor: string, ativo: boolean) => ({
@@ -164,6 +207,12 @@ export default function Fotos({ loaderData }: Route.ComponentProps) {
       titulo: "Preparação",
       chips: eventosComFotos.map((e) =>
         chip(e.nome, "evento", String(e.id), filtros.evento === e.id),
+      ),
+    },
+    {
+      titulo: "Álbuns",
+      chips: albunsPublicos.map((a) =>
+        chip(a.nome, "album", String(a.id), filtros.album === a.id),
       ),
     },
   ];

@@ -283,6 +283,31 @@ describe("analisarFiltros", () => {
       dia: "dia-2",
     });
   });
+
+  test("album válido passa normalizado", () => {
+    expect(analisarFiltros({ album: "7" }, dias)).toEqual({ album: 7 });
+  });
+
+  test("album é excludente: descarta os filtros temporais e o evento", () => {
+    expect(
+      analisarFiltros(
+        {
+          album: "7",
+          evento: "51",
+          dia: "dia-2",
+          momento: "14",
+          musica: "Aleluia",
+        },
+        dias,
+      ),
+    ).toEqual({ album: 7 });
+  });
+
+  test("album inválido é descartado em silêncio (demais filtros valem)", () => {
+    expect(analisarFiltros({ album: "0", evento: "51" }, dias)).toEqual({
+      evento: 51,
+    });
+  });
 });
 
 describe("condicoesGrade", () => {

@@ -1,6 +1,9 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/capa";
+import { Coracao } from "~/componentes/coracao";
 import { GradeFotos } from "~/componentes/grade-fotos";
+import { agruparAlbuns } from "~/lib/albuns";
+import { albunsComFotos, destaquesInstagramaveis } from "~/lib/albuns.server";
 import { contextoCloudflare } from "~/lib/contexto";
 import { amostraEstavel, dataPorExtensoPtBr } from "~/lib/galeria";
 import {
@@ -12,6 +15,9 @@ import {
 } from "~/lib/retiro-publico.server";
 
 const AMOSTRA_EVENTO = 2;
+// quantidade herdada dos destaques provisórios do Bloco A: a troca de fonte
+// (álbum Instagramáveis) não muda quantas fotos a capa mostra
+const DESTAQUES_CAPA = 2;
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
@@ -26,19 +32,31 @@ export async function loader({ context, params }: Route.LoaderArgs) {
   const retiro = await carregarRetiroPublicado(env.DB, params.edicao);
 
   const ids = await idsPorMomento(env.DB, retiro);
-  // destaques provisórios: amostra estável do acervo até o álbum
-  // "Instagramáveis" existir (Bloco C troca só a fonte)
-  const idsDestaques = amostraEstavel(
-    ids.map((f) => f.id),
-    2,
-    `destaques:${retiro.slug}`,
-  );
-  const destaques = await itensPorIds(
+  // destaques: as primeiras fotos do álbum "Instagramáveis" pela ordem manual
+  // da curadoria (match por nome — gate de 26/08/2026); sem o álbum, ou com
+  // ele vazio, o fallback é a amostra estável temporal do Bloco A
+  let destaques = await destaquesInstagramaveis(
     env.DB,
     retiro,
-    idsDestaques,
     env.MIDIA_URL_PUBLICA,
+    DESTAQUES_CAPA,
   );
+  if (destaques.length === 0) {
+    const idsDestaques = amostraEstavel(
+      ids.map((f) => f.id),
+      DESTAQUES_CAPA,
+      `destaques:${retiro.slug}`,
+    );
+    destaques = await itensPorIds(
+      env.DB,
+      retiro,
+      idsDestaques,
+      env.MIDIA_URL_PUBLICA,
+    );
+  }
+
+  // seção de álbuns: só os com fotos, agrupados na ordem manual
+  const albuns = agruparAlbuns(await albunsComFotos(env.DB, retiro));
 
   // Preparação: eventos com foto, cada um com amostra estável
   const eventos = await eventosComFotos(env.DB, retiro);
@@ -70,11 +88,11 @@ export async function loader({ context, params }: Route.LoaderArgs) {
       .map((id) => itemPorId.get(id)!),
   }));
 
-  return { retiro, total: ids.length, destaques, preparacao };
+  return { retiro, total: ids.length, destaques, preparacao, albuns };
 }
 
 export default function Capa({ loaderData }: Route.ComponentProps) {
-  const { retiro, total, destaques, preparacao } = loaderData;
+  const { retiro, total, destaques, preparacao, albuns } = loaderData;
   const base = `/retiros/${retiro.slug}`;
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -134,6 +152,29 @@ export default function Capa({ loaderData }: Route.ComponentProps) {
                 </Link>
               </p>
             </section>
+          ))}
+        </section>
+      )}
+
+      {albuns.length > 0 && (
+        <section aria-label="Álbuns" className="mt-6">
+          <h2 className="text-xl font-bold">Álbuns</h2>
+          {albuns.map((g) => (
+            <div key={g.grupo ?? `solto-${g.albuns[0].id}`} className="mt-2">
+              {g.grupo && <h3 className="font-bold">{g.grupo}</h3>}
+              <ul className="list-none p-0">
+                {g.albuns.map((a) => (
+                  <li key={a.id}>
+                    <Link
+                      to={`${base}/fotos?album=${a.id}`}
+                      className="underline"
+                    >
+                      <Coracao cor={a.cor} /> {a.nome} ({a.total})
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
         </section>
       )}
