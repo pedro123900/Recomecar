@@ -5,11 +5,27 @@
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
+:root {
+  /* base */
+  --azul: #002860; /* exclusivamente fundo — nunca texto ou ação */
+  --branco: #ffffff;
+  --preto: #000000;
+
+  /* semânticos */
+  --pagina-fundo: var(--azul);
+  --balao-fundo: var(--branco); /* balão: texto sobre nuvem/área clara */
+  --texto-sobre-azul: var(--branco);
+  --texto-sobre-balao: var(--preto);
+  --acao-sobre-azul: var(--branco);
+  --acao-sobre-balao: var(--preto);
+}
+
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  background: var(--pagina-fundo);
+  color: var(--texto-sobre-azul);
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  }
+a {
+  color: var(--acao-sobre-azul);
 }

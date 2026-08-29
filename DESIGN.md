@@ -4,11 +4,11 @@ Este arquivo é a fonte da verdade visual. A direção de arte é do **Tuti**; n
 
 ## A direção (a tese da identidade)
 
-Identidade **mariana e luminosa**: o céu como fundo claro, o azul do manto de Nossa Senhora como cor estrutural, o creme/dourado como calor. Elegante, leve, fiel à paleta — e **nada com cara de mockup feito por IA**. Na dúvida entre duas soluções, vence a mais sóbria; se a dúvida continuar, perguntar.
+Identidade **mariana e luminosa**: o **azul profundo do manto** como chão de tudo, **nuvens brancas** como pontuação posicionada sobre ele, o **branco** como cor de luz — texto, ação, logo. O dourado que aparece nas artes (halo da Nossa Senhora) é **conteúdo da arte, não cor de UI**. Elegante, leve, fiel à paleta — e **nada com cara de mockup feito por IA**. Na dúvida entre duas soluções, vence a mais sóbria; se a dúvida continuar, perguntar.
 
 O conteúdo é o protagonista: as **fotos** dos retiros. A interface é moldura — nunca compete com foto.
 
-A ousadia da identidade mora em lugares definidos: o **hero mariano da home**, o **logo script**, os **cards de padroeiro** das edições. Todo o resto (grade, biblioteca, admin, navegação) é quieto e disciplinado. Antes de finalizar qualquer tela, remova um acessório: se um elemento decorativo não serve ao conteúdo, corte.
+A ousadia da identidade mora em lugares definidos: o **hero mariano da home** (fundo azul sólido, nuvens posicionadas, Nossa Senhora central com halo, logo script sobreposto), o **logo script**, os **cards de padroeiro** das edições. Todo o resto (grade, biblioteca, admin, navegação) é quieto e disciplinado. Antes de finalizar qualquer tela, remova um acessório: se um elemento decorativo não serve ao conteúdo, corte.
 
 ## Cores — tokens e regras contextuais
 
@@ -17,30 +17,34 @@ Tudo em variáveis CSS desde o primeiro componente. Nenhuma cor de interface for
 ```css
 :root {
   /* base */
-  --azul:   #002860;
-  --creme:  #F8E2C5;
+  --azul:   #002860;  /* exclusivamente fundo — nunca texto ou ação */
   --branco: #FFFFFF;
+  --preto:  #000000;
 
   /* semânticos */
-  --pagina-fundo:       var(--azul);   /* fundo das páginas/seções de conteúdo */
-  --superficie:         var(--creme);  /* cartões, painéis, barras sobre o azul */
-  --texto-sobre-azul:   var(--creme);
-  --texto-sobre-claro:  var(--azul);   /* sobre creme ou branco */
-  --acao-sobre-azul:    var(--creme);  /* botões e links em contexto escuro */
-  --acao-sobre-claro:   var(--azul);   /* botões e links em contexto claro */
+  --pagina-fundo:       var(--azul);
+  --balao-fundo:        var(--branco);  /* balão: texto sobre nuvem/área clara */
+  --texto-sobre-azul:   var(--branco);
+  --texto-sobre-balao:  var(--preto);
+  --acao-sobre-azul:    var(--branco);  /* botões e links em contexto azul */
+  --acao-sobre-balao:   var(--preto);
 }
 ```
 
-**Regras de emprego (do Tuti — fechadas):**
+**Regras de emprego (do Tuti — fechadas; paleta atualizada em 28/08/2026):**
 
-- Fundo azul ⇒ texto, botões e links em **creme**. Fundo creme ou branco ⇒ texto, botões e links em **azul**.
-- **Branco: uso mínimo**, e somente sobre azul (cor ou céu) — logo, títulos de página (como o "Retiros" do esboço) e detalhes. **Nunca branco encostado em creme** — os dois não convivem lado a lado.
-- Sobre azul, o texto corrente padrão é **creme**; branco é reservado a logo/títulos, com parcimônia.
-- `#F8E2C5` foi **escolhido** sobre `#FFFFEA` (descartado — não usar). Pendência: carimbo do Tuti na primeira tela implementada.
+- **Azul é exclusivamente cor de fundo** — nunca texto, botão ou link.
+- Fundo azul ⇒ texto, botões e links em **branco**. O branco assume todos os usos que eram do creme; caiu a antiga restrição "branco só em logo e títulos".
+- Fundo branco (**balão**) ⇒ texto em **preto**.
+- **Balão × scrim — divisão explícita:** texto sobre **nuvem ou área clara de imagem** entra em **balão branco com texto preto**; texto sobre **foto de retiro** (hero da capa, lightbox) usa **scrim** — a foto é protagonista e um balão a taparia.
+- **Elemento branco nunca sobre nuvem, a não ser dentro de balão** (substitui a antiga "nunca branco encostado no creme").
+- **Superfície geral está em aberto:** `--balao-fundo` cobre só o balão. Painéis do admin, cartões e superfícies que não são balão **não foram decididos** — decidir na fase de skin com o Tuti. De propósito não existe token de "superfície padrão".
+- Descartes (não usar, não reintroduzir): `#FFFFEA` (preterido já na escolha original) e `#F8E2C5` (**creme — descartado em 28/08/2026** junto com o conceito de céu-textura; o branco assumiu todos os seus papéis).
+- **Preto = `#000000`**, por leitura literal do "fonte preta" do Tuti (nenhum mockup tem balão para amostrar o valor). Pendência: carimbo do Tuti no **balão branco/texto preto** na primeira tela real — mesma pendência que o creme teve. Sendo o cartão institucional um bloco de texto longo, o Tuti pode querer revisar esse valor ao ver a tela.
 - Precisou de uma cor que não existe aqui? **Parar e perguntar** — o Tuti pensa numa terceira cor se for o caso.
-- Contraste do par azul × creme ≈ **10,8:1 (AAA nos dois sentidos)**. Qualquer cor de tema de edição futura passa por checagem de contraste antes de entrar (mínimo AA 4,5:1 para texto).
+- Contraste (WCAG 2.x, calculado em 28/08/2026): **branco sobre azul 14,26:1 (AAA)**; **preto sobre branco 21:1 (AAA)**. Qualquer cor de tema de edição futura passa por checagem de contraste antes de entrar (mínimo AA 4,5:1 para texto).
 
-**Scrim (única exceção à proibição de gradiente):** texto sobre imagem exige sempre um degradê/escurecimento de legibilidade por trás (ex.: transparente → azul). É regra funcional, não decoração.
+**Scrim (única exceção à proibição de gradiente):** texto sobre **foto de retiro** exige sempre um degradê/escurecimento de legibilidade por trás (ex.: transparente → azul). É regra funcional, não decoração. Para nuvem e área clara de imagem a solução é o **balão**, não o scrim.
 
 ## Tipografia
 
@@ -49,14 +53,14 @@ Tudo em variáveis CSS desde o primeiro componente. Nenhuma cor de interface for
 - Registrada como decisão **adiada**: uma sans de apoio para telas funcionais densas (filtros, admin, formulários) — sugestão em pauta: Nunito. Reavaliar quando essas telas existirem; não introduzir por conta própria.
 - Hierarquia entre texto principal e secundário: por **tamanho e peso**, nunca por cinza (proibição abaixo).
 
-## Modelo de página — imagem vs. neutro (fechado)
+## Modelo de página — apresentação vs. conteúdo (fechado)
 
 | Tipo | Fundo | Exemplos |
 |---|---|---|
-| **Apresentação** | Imagem (céus com nuvens; assets do Tuti) com scrim onde houver texto | Home; topo/hero da página do retiro |
+| **Apresentação** | `--azul` sólido + peças de produção posicionadas (nuvens, Nossa Senhora, logo — `design/assets/`) | Home |
 | **Conteúdo** | `--azul` neutro | Grade da galeria, índice de retiros, biblioteca, admin |
 
-A página do retiro (`/retiros/:edicao`) é **híbrida**: hero de apresentação no topo (imagem, título, datas, padroeiro — compacto: as fotos aparecem no primeiro scroll) → transição via scrim → grade sobre azul. A cor de fundo existe por baixo de toda imagem (aparece no carregamento e no scroll além dela).
+Não existe mais fundo de imagem de céu em tela inteira — o conceito de céu-textura foi **descartado em 28/08/2026** (referências 02/03 removidas). A página do retiro (`/retiros/:edicao`) é **híbrida**: hero de apresentação no topo (**foto de retiro** com scrim — título, datas, padroeiro — compacto: as fotos aparecem no primeiro scroll) → transição via scrim → grade sobre azul. A cor de fundo existe por baixo de toda imagem (aparece no carregamento e no scroll além dela).
 
 ## Tema por edição
 
@@ -67,9 +71,9 @@ A página do retiro (`/retiros/:edicao`) é **híbrida**: hero de apresentação
 
 ## Componentes canônicos (dos esboços do Tuti)
 
-- **Navegação**: pills de contorno fino e cantos bem arredondados — rótulos **Retiros · Biblioteca · RecomeMusic**. No celular, resolver o colapso sem inventar padrão exótico (a versão em pé da home ainda não foi desenhada; propor a partir do esboço e validar com screenshot).
+- **Navegação**: pills de **contorno fino branco, fundo transparente, rótulo branco sublinhado**, cantos bem arredondados — rótulos **Retiros · Biblioteca · RecomeMusic**. No celular: **linha única** (confirmado pela referência 06). Posicionados **fora das nuvens** (regra do branco sobre nuvem). Fato verificado em 28/08/2026 por amostragem de pixel nas referências 01 e 06: o interior dos pills é `#002860` (o fundo passando por dentro) — não existe versão preenchida.
 - **Card de edição**: vertical, cantos generosos, cor própria da edição, arte do padroeiro, nome "N° Série" — **com cedilha** ("9° Recomeçar"; o "Recomecar" dos esboços foi pressa, confirmado).
-- **Cartão de texto** (institucional da home): superfície creme, cantos generosos, texto **azul** (a regra venceu o preto do esboço — exemplo canônico de "regra vence referência"). O texto institucional do esboço é **conteúdo real aprovado** — usar verbatim.
+- **Cartão de texto** (institucional da home): **balão branco com texto preto** — **PROVISÓRIO**: carimbo do Tuti na primeira tela real (mesma pendência que o creme teve). O texto institucional do esboço é **conteúdo real aprovado** — usar verbatim.
 - **Grade de fotos**: lazy, aspect-ratio reservado, blur-up, fundo azul.
 - **Lightbox**: player de vídeo, download do original, navegação por toque.
 - **Ícones**: **Phosphor Icons**, biblioteca única. Sem o ícone certo? Perguntar.
@@ -91,7 +95,7 @@ pt-BR, sentence case, voz ativa. Botão nomeia exatamente a ação ("Baixar foto
 Nunca usar:
 
 - Paleta neon (cores saturadas artificiais)
-- Gradiente roxo — e gradiente decorativo em geral. Única exceção: o scrim de legibilidade sobre imagem
+- Gradiente roxo — e gradiente decorativo em geral. Única exceção: o scrim de legibilidade sobre foto de retiro
 - Glassmorphism (vidro fosco/blur atrás de painéis e barras)
 - Glow colorido e sombra colorida (box-shadow colorido, brilho ao redor de botões e cards) — incluindo "dark mode glow-up"
 - Sombra pesada e dura (drop shadow forte, elemento "flutuando" com peso)
@@ -102,6 +106,7 @@ Nunca usar:
 - Status dots (bolinhas coloridas de status) — o site não tem status de nada
 - Ícone dentro de quadradinho arredondado (clichê de card de features)
 - Emoji na interface, em qualquer texto do site
+- Elemento branco solto sobre nuvem (texto, logo, contorno): branco vive sobre azul; sobre nuvem ou área clara, só dentro de balão
 - **Animação decorativa: nenhuma** (fade-in ao rolar, parallax, stagger etc.). Se um dia houver alguma animação, será decidida pelo time caso a caso — e não será essas.
 
 Regras de conduta na implementação:
@@ -111,20 +116,30 @@ Regras de conduta na implementação:
 - **Hierarquia visual é decisão do time** (Pedro/Tuti/Gui), definida nas composições — não inventar níveis. Evitar aninhamento (card dentro de card, borda dentro de borda).
 - Referência concreta > adjetivo. Se a instrução for vaga, pedir a referência em vez de interpretar livremente.
 
+## Peças de produção (em `design/assets/`)
+
+As peças finais da home, entregues pelo Tuti em 28/08/2026. **Não entram em código nesta fase** — ficam para a fase de skin; até lá, são referência de composição.
+
+| Arquivo | O que é |
+|---|---|
+| `nossa-senhora.png` | Figura central da home, fundo transparente, **halo dourado de estrelas já embutido na arte** (o dourado é conteúdo da arte, não token de UI). |
+| `nuvem.png` | **Única nuvem do site**: PNG branco semi-transparente. Estratégia de asset fechada: o céu se compõe **reutilizando este arquivo** flipado/escalado/reposicionado — não criar segunda nuvem. |
+| `logo-branco.png` | Logo script em branco puro, fundo transparente. Na home, sobreposto à Nossa Senhora. |
+
 ## Referências (em `design/referencias/`)
 
 | Arquivo | O que extrair |
 |---|---|
-| `01-home-hero.jpeg` | Composição da home: céu real, Nossa Senhora central, logo script branco sobreposto, nav em pills. Atenção: logo branco sobre nuvem clara quase some ⇒ é o caso canônico de scrim. |
-| `02-ceu-textura-a.jpeg` / `03-ceu-textura-b.jpeg` | Assets de fundo claro (céu com granulação suave de foto — não é "textura rústica"). |
-| `04-home-institucional.jpeg` | Cartão creme com o texto institucional (conteúdo real aprovado). Cor do texto na implementação: **azul**, pela regra. |
-| `05-retiros-cards.jpeg` | Fundo azul confirmado em página de conteúdo; cards por edição com cor própria e padroeiro; título de página em branco sobre azul (uso legítimo do branco). |
+| `01-home-hero.png` | Composição da home (deitado): fundo `--azul` sólido, nuvens posicionadas nas bordas, Nossa Senhora central com halo, logo script branco sobreposto, nav em pills de contorno branco no topo, fora das nuvens. |
+| `04-home-institucional.jpeg` | Composição do cartão institucional e o texto (conteúdo real aprovado — usar verbatim). Cores na implementação: **balão branco com texto preto** (regra vence referência — o creme do esboço foi descartado). |
+| `05-retiros-cards.jpeg` | Fundo azul confirmado em página de conteúdo; cards por edição com cor própria e padroeiro; título de página em branco sobre azul. O que era creme na referência vira **branco** na implementação (regra vence referência). |
+| `06-home-em-pe.png` | Comportamento mobile da home: pills em **linha única** no topo, fora das nuvens; Nossa Senhora central com halo e logo sobreposto; nuvens nas bordas. |
 
 ## Processo anti-slop (obrigatório em toda tela)
 
 1. Implementar contra os tokens e as composições combinadas.
 2. Subir o dev server e capturar screenshot via **Playwright** em **390×844** (primário) e **1366×768**.
-3. Criticar a própria tela contra o checklist: só cores de token? alguma proibição violada? bate com a referência correspondente? contraste e scrim ok? mobile resolvido primeiro? o que dá para **remover**?
+3. Criticar a própria tela contra o checklist: só cores de token? alguma proibição violada? bate com a referência correspondente? contraste, balão e scrim ok? mobile resolvido primeiro? o que dá para **remover**?
 4. Refinar e repetir. **Mínimo duas iterações; a primeira versão nunca é a final.**
 5. No resumo para o Pedro: screenshot final anexado — ele julga por imagem, não por descrição.
 

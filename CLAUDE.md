@@ -202,5 +202,5 @@ Depois da fase: admin completo → aplicação do design (DESIGN.md) → semana 
 - **Pedro:** material real (fotos originais com EXIF — WhatsApp destrói EXIF, tem que vir do arquivo original; cronograma real de uma edição passada; lista de livros com capa e descrição; link do álbum no Spotify; nomes dos créditos); links dos Google Drives + nome/série/padroeiro das 8 edições antigas (para os cards); licença comercial da fonte More Sugar; Node ≥ 22.22.
 - **Sequência do domínio até o retiro (Pedro; prazo prático: início de setembro/2026):** domínio próprio apontado na conta Cloudflare atual (pessoal do Pedro) → domínio custom no bucket `recomecar-media` + Transform Rule com `X-Robots-Tag: noindex` no host de mídia → **só então o upload em massa**.
 - **Migração para conta Cloudflare do grupo: depois do retiro, sem prazo.** A coordenação quer avaliar a adesão do grupo antes de assumir a estrutura definitiva. É viável a qualquer momento: código no GitHub, D1 exporta/importa, cópia entre buckets sem custo de banda.
-- **Tuti:** carimbo final do `#F8E2C5` na primeira tela implementada; artes dos cards das edições; futuramente, layout tematizado do 9.
+- **Tuti:** carimbo do balão branco/texto preto na primeira tela implementada; artes dos cards das edições; futuramente, layout tematizado do 9.
 - **Cloudflare Access** no `/admin`: configurar quando o domínio existir.
